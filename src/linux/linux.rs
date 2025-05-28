@@ -9,6 +9,12 @@ pub struct LinuxCpuInfo {
     model: String,
     /// CPU vendor ID (e.g., "AuthenticAMD", "GenuineIntel")
     vendor: String,
+    /// CPU architecture (e.g., "x86_64")
+    architecture: String,
+    /// CPU byte order (e.g., "Little Endian")
+    byte_order: String,
+    /// CPU flags (e.g., "sse4_2 avx2")
+    flags: String,
     /// Number of physical CPU cores
     physical_cores: u32,
     /// Number of logical CPU cores (threads)
@@ -38,9 +44,18 @@ impl LinuxCpuInfo {
 
         let output_str = String::from_utf8_lossy(&output.stdout);
         
+        // Get architecture using uname
+        let uname_output = Command::new("uname")
+            .args(["-m"])
+            .output()
+            .map_err(|e| e.to_string())?;
+        let architecture = String::from_utf8_lossy(&uname_output.stdout).trim().to_string();
+        
         // Parse the output
         let mut model = String::new();
         let mut vendor = String::new();
+        let mut byte_order = String::new();
+        let mut flags = String::new();
         let mut physical_cores = 0;
         let mut logical_cores = 0;
         let mut base_mhz = None;
@@ -49,12 +64,24 @@ impl LinuxCpuInfo {
         let mut l2_size = None;
         let mut l3_size = None;
 
+        let mut collecting_flags = false;
         for line in output_str.lines() {
             if line.starts_with("Model name:") {
                 model = line.split("Model name:").nth(1).unwrap_or("").trim().to_string();
             } else if line.starts_with("Vendor ID:") {
                 vendor = line.split("Vendor ID:").nth(1).unwrap_or("").trim().to_string();
-            } else if line.starts_with("CPU(s):") {
+            } else if line.starts_with("Byte Order:") {
+                byte_order = line.split("Byte Order:").nth(1).unwrap_or("").trim().to_string();
+            } else if line.starts_with("Flags:") {
+                collecting_flags = true;
+                flags = line.split("Flags:").nth(1).unwrap_or("").trim().to_string();
+            } else if collecting_flags && line.starts_with(" ") {
+                flags.push_str(" ");
+                flags.push_str(line.trim());
+            } else {
+                collecting_flags = false;
+            }
+            if line.starts_with("CPU(s):") {
                 logical_cores = line.split("CPU(s):").nth(1).unwrap_or("0").trim().parse().unwrap_or(0);
             } else if line.starts_with("Core(s) per socket:") {
                 let cores_per_socket: u32 = line.split("Core(s) per socket:").nth(1).unwrap_or("0").trim().parse().unwrap_or(0);
@@ -101,6 +128,9 @@ impl LinuxCpuInfo {
         Ok(LinuxCpuInfo {
             model,
             vendor,
+            architecture,
+            byte_order,
+            flags,
             physical_cores,
             logical_cores,
             base_mhz,
@@ -116,6 +146,8 @@ impl LinuxCpuInfo {
         let logo_lines = get_logo_lines_for_vendor(&self.vendor).unwrap_or_else(|| vec![]);
         let info_lines = vec![
             format!("Name: {:<30}", self.model),
+            format!("Architecture: {:<30}", self.architecture),
+            format!("Byte Order: {:<30}", self.byte_order),
             format!("Vendor: {:<30}", self.vendor),
             format!("Max Frequency: {:>7}", match self.base_mhz { Some(ghz) => format!("{:.3} GHz", ghz), None => "Unknown".to_string() }),
             format!("Cores: {:>2} cores ({} threads)", self.physical_cores, self.logical_cores),
@@ -123,6 +155,7 @@ impl LinuxCpuInfo {
             format!("L1d Size: {}", match self.l1d_size { Some((per, _)) => format!("{}KB", per), None => "Unknown".to_string() }),
             format!("L2 Size: {}", match self.l2_size { Some((per, _)) => format!("{}KB", per), None => "Unknown".to_string() }),
             format!("L3 Size: {}", match self.l3_size { Some((per, _)) => format!("{}KB", per), None => "Unknown".to_string() }),
+            format!("Flags: {}", self.flags),
         ];
 
         // Pad info_lines to at least as many as logo_lines for alignment
