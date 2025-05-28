@@ -1,20 +1,50 @@
 mod linux; // Declares the linux module (src/linux/mod.rs)
 mod art; // Add this to declare the art module
+mod windows;
 
 // Use the LinuxCpuInfo struct from the nested linux module
 use crate::linux::linux::LinuxCpuInfo;
+use clap::Parser;
+use std::env;
+
+#[derive(Parser)]
+#[command(author, version, about = "A CPU information fetcher", long_about = None)]
+struct Args {
+    /// Disable logo display
+    #[arg(short = 'n', long = "no-logo")]
+    no_logo: bool,
+}
 
 fn main() {
+    let args = Args::parse();
 
-    // TODO: Check for current OS. then display the logo for the current OS.
-    // For now, we will just use the LinuxCpuInfo struct to display CPU information.
-    // This reads from /proc/cpuinfo and displays the CPU model, vendor, and logical processor count.
-    match LinuxCpuInfo::new() {
-        Ok(cpu_info) => {
-            cpu_info.display_info();
+    // Detect OS and use appropriate module
+    let os = env::consts::OS;
+    
+    match os {
+        "linux" => {
+            match LinuxCpuInfo::new() {
+                Ok(cpu_info) => {
+                    cpu_info.display_info();
+                }
+                Err(e) => {
+                    eprintln!("Error fetching CPU info: {}", e);
+                }
+            }
         }
-        Err(e) => {
-            eprintln!("Error fetching CPU info: {}", e);
+        "windows" => {
+            use crate::windows::windows::WindowsCpuInfo;
+            match WindowsCpuInfo::new() {
+                Ok(cpu_info) => {
+                    cpu_info.display_info();
+                }
+                Err(e) => {
+                    eprintln!("Error fetching CPU info: {}", e);
+                }
+            }
+        }
+        _ => {
+            eprintln!("Unsupported operating system: {}", os);
         }
     }
 }

@@ -1,6 +1,5 @@
 use std::fs;
 use std::collections::HashMap;
-use crate::art;
 
 /// Struct representing parsed Linux CPU information.
 pub struct LinuxCpuInfo {
@@ -161,11 +160,6 @@ impl LinuxCpuInfo {
 
         // Try to get max frequency from /sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq (in kHz)
         let sysfs_max_freq = fs::read_to_string("/sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq")
-            .ok()
-            .and_then(|s| s.trim().parse::<u32>().ok())
-            .map(|khz| khz as f32 / 1_000_000.0); // GHz
-        // Try to get base frequency from /sys/devices/system/cpu/cpu0/cpufreq/base_frequency (in kHz)
-        let sysfs_base_freq = fs::read_to_string("/sys/devices/system/cpu/cpu0/cpufreq/base_frequency")
             .ok()
             .and_then(|s| s.trim().parse::<u32>().ok())
             .map(|khz| khz as f32 / 1_000_000.0); // GHz
