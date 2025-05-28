@@ -119,11 +119,9 @@ impl LinuxCpuInfo {
             format!("Vendor: {:<30}", self.vendor),
             format!("Base Frequency: {:>7}", match self.base_mhz { Some(ghz) => format!("{:.3} GHz", ghz), None => "Unknown".to_string() }),
             format!("Cores: {:>2} cores ({} threads)", self.physical_cores, self.logical_cores),
-            format!("L1i Size: {}", match self.l1i_size { Some((per, total)) => format!("{}KB ({} instances)", per, total), None => "Unknown".to_string() }),
-            format!("L1d Size: {}", match self.l1d_size { Some((per, total)) => format!("{}KB ({} instances)", per, total), None => "Unknown".to_string() }),
-            format!("L2 Size: {}", match self.l2_size { Some((per, total)) => format!("{}KB ({} instances)", per, total), None => "Unknown".to_string() }),
-            format!("L3 Size: {}", match self.l3_size { Some((per, total)) => format!("{}KB ({} instances)", per, total), None => "Unknown".to_string() }),
-            format!("L3 Size: {}", match self.l3_size { Some((per, total)) => format!("{}KB ({} instance)", per, total), None => "Unknown".to_string() }),
+            format!("L1i Size: {}", match self.l1i_size { Some((per, _)) => format!("{}KB", per), None => "Unknown".to_string() }),
+            format!("L1d Size: {}", match self.l1d_size { Some((per, _)) => format!("{}KB", per), None => "Unknown".to_string() }),
+            format!("L2 Size: {}", match self.l2_size { Some((per, _)) => format!("{}KB", per), None => "Unknown".to_string() }),
         ];
 
         // Pad info_lines to at least as many as logo_lines for alignment
