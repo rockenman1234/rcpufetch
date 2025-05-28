@@ -155,8 +155,29 @@ impl LinuxCpuInfo {
             format!("L1d Size: {}", match self.l1d_size { Some((per, _)) => format!("{}KB", per), None => "Unknown".to_string() }),
             format!("L2 Size: {}", match self.l2_size { Some((per, _)) => format!("{}KB", per), None => "Unknown".to_string() }),
             format!("L3 Size: {}", match self.l3_size { Some((per, _)) => format!("{}KB", per), None => "Unknown".to_string() }),
-            format!("Flags: {}", self.flags),
         ];
+
+        // Wrap flags at 80 characters per line, indenting wrapped lines
+        let wrap_width = 80;
+        let flag_label = "Flags: ";
+        let mut flag_lines = Vec::new();
+        let mut current_line = String::from(flag_label);
+        for word in self.flags.split_whitespace() {
+            if current_line.len() + word.len() + 1 > wrap_width {
+                flag_lines.push(current_line);
+                current_line = format!("{:width$}{}", "", word, width=flag_label.len());
+            } else {
+                if current_line.trim_end().ends_with(":") {
+                    current_line.push_str(word);
+                } else {
+                    current_line.push(' ');
+                    current_line.push_str(word);
+                }
+            }
+        }
+        if !current_line.trim().is_empty() {
+            flag_lines.push(current_line);
+        }
 
         // Pad info_lines to at least as many as logo_lines for alignment
         let mut padded_info_lines = info_lines.clone();
@@ -175,6 +196,16 @@ impl LinuxCpuInfo {
         if info_lines.len() > logo_lines.len() {
             for info in &info_lines[logo_lines.len()..] {
                 println!("{:<width$}   {}", "", info, width=logo_width);
+            }
+        }
+
+        // Print wrapped flags
+        for (i, line) in flag_lines.iter().enumerate() {
+            if i == 0 && info_lines.len() <= logo_lines.len() {
+                // Print first flags line after info if logo is shorter
+                println!("{:<width$}   {}", "", line, width=logo_width);
+            } else if i > 0 {
+                println!("{:<width$}   {}", "", line, width=logo_width);
             }
         }
     }
