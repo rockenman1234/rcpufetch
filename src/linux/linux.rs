@@ -157,15 +157,16 @@ impl LinuxCpuInfo {
             format!("L3 Size: {}", match self.l3_size { Some((per, _)) => format!("{}KB", per), None => "Unknown".to_string() }),
         ];
 
-        // Wrap flags at 80 characters per line, indenting wrapped lines
+        // Wrap flags at 80 characters per line, indenting wrapped lines with 7 spaces
         let wrap_width = 80;
         let flag_label = "Flags: ";
+        let indent = "       "; // 7 spaces
         let mut flag_lines = Vec::new();
         let mut current_line = String::from(flag_label);
         for word in self.flags.split_whitespace() {
             if current_line.len() + word.len() + 1 > wrap_width {
                 flag_lines.push(current_line);
-                current_line = format!("{:width$}{}", "", word, width=flag_label.len());
+                current_line = format!("{}{}", indent, word);
             } else {
                 if current_line.trim_end().ends_with(":") {
                     current_line.push_str(word);
@@ -180,7 +181,7 @@ impl LinuxCpuInfo {
         }
 
         // Insert the flag lines right after the L3 cache line
-        for (i, line) in flag_lines.into_iter().enumerate() {
+        for line in flag_lines.into_iter() {
             info_lines.push(line);
         }
 
