@@ -2,24 +2,45 @@
 
 **rcpufetch** is a fast, cross-platform command-line tool written in Rust that displays detailed information about your CPU in a visually appealing way, including vendor ASCII art logos.
 
+> [!WARNING]
+> This project is still in early development, please report bugs under the issues tab. Check back in the future for the first release, thanks!
+
 ## Features
 - Shows CPU model, vendor, core and thread count, cache sizes, and maximum frequency
 - Displays a colorful ASCII art logo for your CPU vendor (AMD, Intel, ARM, NVIDIA, etc.)
-- Supports Linux (other OS support can be added—see CONTRIBUTING.md)
-- Reads from `/proc/cpuinfo` and `/sys` for accurate hardware details
-- Clean, horizontally aligned output for easy reading
+- Clean codebase - nothing but the Rust `STDLIB` for the fastest performance possible.
+- Horizontally aligned output for easy reading, complete with logo support.
 
 ## Example Output
 ```
+╰─>$ ./rcpufetch
           '###############                Name: AMD Ryzen 5 9600X 6-Core Processor
-             ,#############               Vendor: AuthenticAMD
+             ,#############               Vendor: AuthenticAMD                  
                       .####               Max Frequency: 5.486 GHz
               #.      .####               Cores:  6 cores (12 threads)
-            :##.      .####               L1i Size: 32KB (192KB Total)
-           :###.      .####               L1d Size: 48KB (288KB Total)
-           #########.   :##               L2 Size: 1024KB (6144KB Total)
+            :##.      .####               L1i Size: 32KB (32KB Total)
+           :###.      .####               L1d Size: 48KB (48KB Total)
+           #########.   :##               L2 Size: 1024KB (1024KB Total)
            #######.       ;               L3 Size: 32768KB (32768KB Total)
+                                          
+    ###     ###      ###   #######        
+   ## ##    #####  #####   ##     ##      
+  ##   ##   ### #### ###   ##      ##     
+ #########  ###  ##  ###   ##      ##     
+##       ## ###      ###   ##     ##      
+##       ## ###      ###   #######        
 ```
+
+## 1. Support
+
+| OS          | x86_64 / x86       | ARM                | RISC-V             | PowerPC            |
+|:-----------:|:------------------:|:------------------:|:------------------:|:------------------:|
+| GNU / Linux | :heavy_check_mark: | :x:                | :x:                | :x:                |
+| Windows     | :x:                | :x:                | :x:                | :x:                |
+| Android     | :x:                | :x:                | :x:                | :x:                |
+| macOS       | :x:                | :x:                | :x:                | :x:                |
+| FreeBSD     | :x:                | :x:                | :x:                | :x:                |
+
 
 ## Installation
 1. Clone the repository:
@@ -40,4 +61,4 @@
 See [CONTRIBUTING.md](CONTRIBUTING.md) for details on how to add features, support new operating systems, and contribute code or ASCII art.
 
 ## License
-MIT
+GPLv3
