@@ -122,6 +122,7 @@ impl LinuxCpuInfo {
             format!("L1i Size: {}", match self.l1i_size { Some((per, _)) => format!("{}KB", per), None => "Unknown".to_string() }),
             format!("L1d Size: {}", match self.l1d_size { Some((per, _)) => format!("{}KB", per), None => "Unknown".to_string() }),
             format!("L2 Size: {}", match self.l2_size { Some((per, _)) => format!("{}KB", per), None => "Unknown".to_string() }),
+            format!("L3 Size: {}", match self.l3_size { Some((per, _)) => format!("{}KB", per), None => "Unknown".to_string() }),
         ];
 
         // Pad info_lines to at least as many as logo_lines for alignment
