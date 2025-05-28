@@ -8,13 +8,13 @@
 ## Features
 - Shows CPU model, vendor, core and thread count, cache sizes, and maximum frequency
 - Displays a colorful ASCII art logo for your CPU vendor (AMD, Intel, ARM, NVIDIA, etc.)
-- Clean codebase - nothing but the Rust `STDLIB` for the fastest performance possible.
+- Clean codebase - nothing but Rust in here!
 - Horizontally aligned output for easy reading, complete with logo support.
 
 ## Example Output
 ```
 ╰─>$ ./rcpufetch
-          '###############                Name: AMD Ryzen 5 9600X 6-Core Processor
+          '###############                Name: AMD Ryzen 5 Processor
              ,#############               Vendor: AuthenticAMD                  
                       .####               Max Frequency: 5.486 GHz
               #.      .####               Cores:  6 cores (12 threads)
@@ -36,8 +36,7 @@
 | OS          | x86_64 / x86       | ARM                | RISC-V             | PowerPC            |
 |:-----------:|:------------------:|:------------------:|:------------------:|:------------------:|
 | GNU / Linux | :heavy_check_mark: | :x:                | :x:                | :x:                |
-| Windows     | :x:                | :x:                | :x:                | :x:                |
-| Android     | :x:                | :x:                | :x:                | :x:                |
+| Windows     | :heavy_check_mark: | :x:                | :x:                | :x:                |
 | macOS       | :x:                | :x:                | :x:                | :x:                |
 | FreeBSD     | :x:                | :x:                | :x:                | :x:                |
 
