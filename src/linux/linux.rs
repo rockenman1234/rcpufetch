@@ -144,7 +144,7 @@ impl LinuxCpuInfo {
     /// Print the CPU information in a horizontally aligned format with the vendor logo.
     pub fn display_info(&self) {
         let logo_lines = get_logo_lines_for_vendor(&self.vendor).unwrap_or_else(|| vec![]);
-        let info_lines = vec![
+        let mut info_lines = vec![
             format!("Name: {:<30}", self.model),
             format!("Architecture: {:<30}", self.architecture),
             format!("Byte Order: {:<30}", self.byte_order),
@@ -179,6 +179,11 @@ impl LinuxCpuInfo {
             flag_lines.push(current_line);
         }
 
+        // Insert the flag lines right after the L3 cache line
+        for (i, line) in flag_lines.into_iter().enumerate() {
+            info_lines.push(line);
+        }
+
         // Pad info_lines to at least as many as logo_lines for alignment
         let mut padded_info_lines = info_lines.clone();
         while padded_info_lines.len() < logo_lines.len() {
@@ -196,16 +201,6 @@ impl LinuxCpuInfo {
         if info_lines.len() > logo_lines.len() {
             for info in &info_lines[logo_lines.len()..] {
                 println!("{:<width$}   {}", "", info, width=logo_width);
-            }
-        }
-
-        // Print wrapped flags
-        for (i, line) in flag_lines.iter().enumerate() {
-            if i == 0 && info_lines.len() <= logo_lines.len() {
-                // Print first flags line after info if logo is shorter
-                println!("{:<width$}   {}", "", line, width=logo_width);
-            } else if i > 0 {
-                println!("{:<width$}   {}", "", line, width=logo_width);
             }
         }
     }
