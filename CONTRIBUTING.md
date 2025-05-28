@@ -68,9 +68,9 @@ rcpufetch/
 - For new logo art, add it to `src/art/logos.rs` and update the vendor match logic.
 
 ### Other OSes
-- To add support for another OS (e.g., Windows, macOS):
-  1. Create a new folder under `src/` (e.g., `src/windows/`).
-  2. Implement a module similar to `linux.rs` for that OS.
+- To add support for another OS (e.g., Solaris, Haiku, etc):
+  1. Create a new folder under `src/` (e.g., `src/haiku/`).
+  2. Implement a module similar to `src/linux/linux.rs` for that OS.
   3. Add a `mod.rs` in the new folder.
   4. Update `main.rs` to detect the OS and call your new module.
   5. Add OS-specific ASCII art to `src/art/logos.rs` if needed.

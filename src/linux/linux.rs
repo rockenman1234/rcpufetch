@@ -157,10 +157,15 @@ impl LinuxCpuInfo {
             format!("L3 Size: {}", match self.l3_size { Some((per, _)) => format!("{}KB", per), None => "Unknown".to_string() }),
         ];
 
-        // Wrap flags at 80 characters per line, indenting wrapped lines with 7 spaces
-        let wrap_width = 80;
+        let logo_width = logo_lines.iter().map(|l| l.chars().count()).max().unwrap_or(0);
+        let sep = "   ";
+        let left_margin = logo_width + sep.len();
+        let total_width = 100; // You can adjust this to your preferred terminal width
         let flag_label = "Flags: ";
         let indent = "       "; // 7 spaces
+        let wrap_width = total_width - left_margin;
+
+        // Wrap flags so that each line starts at the info column
         let mut flag_lines = Vec::new();
         let mut current_line = String::from(flag_label);
         for word in self.flags.split_whitespace() {
@@ -180,29 +185,24 @@ impl LinuxCpuInfo {
             flag_lines.push(current_line);
         }
 
-        // Insert the flag lines right after the L3 cache line
-        for line in flag_lines.into_iter() {
-            info_lines.push(line);
-        }
+        let info_len = info_lines.len();
+        let logo_len = logo_lines.len();
+        let max_lines = std::cmp::max(logo_len, info_len + flag_lines.len());
 
-        // Pad info_lines to at least as many as logo_lines for alignment
-        let mut padded_info_lines = info_lines.clone();
-        while padded_info_lines.len() < logo_lines.len() {
-            padded_info_lines.push(String::new());
-        }
-
-        let logo_width = logo_lines.iter().map(|l| l.chars().count()).max().unwrap_or(0);
-        
-        // Print logo and info side by side
-        for (logo, info) in logo_lines.iter().zip(padded_info_lines.iter()) {
-            println!("{:<width$}   {}", logo, info, width=logo_width);
-        }
-
-        // If info_lines is longer than logo_lines, print the rest
-        if info_lines.len() > logo_lines.len() {
-            for info in &info_lines[logo_lines.len()..] {
-                println!("{:<width$}   {}", "", info, width=logo_width);
-            }
+        // Print logo and info side by side for overlapping lines
+        let mut info_idx = 0;
+        for i in 0..max_lines {
+            let logo = logo_lines.get(i).map(|s| s.as_str()).unwrap_or("");
+            let info = if info_idx < info_lines.len() {
+                let s = &info_lines[info_idx];
+                info_idx += 1;
+                s.as_str().to_string()
+            } else if !flag_lines.is_empty() {
+                flag_lines.remove(0)
+            } else {
+                String::new()
+            };
+            println!("{:<width$}{}{}", logo, sep, info.as_str(), width=logo_width);
         }
     }
 }
