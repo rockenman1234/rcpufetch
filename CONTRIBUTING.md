@@ -10,7 +10,6 @@ Thank you for your interest in contributing to **rcpufetch**! This document will
 - [Linux Implementation Deep Dive](#linux-implementation-deep-dive)
 - [How to Contribute](#how-to-contribute)
 - [Adding Features for Each OS](#adding-features-for-each-os)
-- [ASCII Art and Logo System](#ascii-art-and-logo-system)
 - [Coding Style](#coding-style)
 - [Testing Guidelines](#testing-guidelines)
 - [Reporting Issues](#reporting-issues)
