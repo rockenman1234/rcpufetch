@@ -6,7 +6,7 @@
 > This project is still in early development, please report bugs under the issues tab. Check back in the future for the first release, thanks!
 
 ## Features
-- Shows CPU model, vendor, core and thread count, cache sizes, maximum frequency, and CPU flags
+- Shows CPU model, vendor, core and thread count, cache sizes, frequency info, and CPU flags
 - Displays a colorful ASCII art logo for your CPU vendor (AMD, Intel, ARM, NVIDIA, PowerPC, Apple)
 - Override logo display with the `--logo` flag to show any vendor's logo regardless of your actual CPU
 - Disable logo display entirely with the `--no-logo` flag for clean text output
