@@ -1,9 +1,12 @@
 use std::fs;
-use std::collections::HashMap;
 use std::process::Command;
 use crate::art::logos::get_logo_lines_for_vendor;
 
 /// Struct representing parsed Linux CPU information.
+///
+/// This struct contains comprehensive CPU information parsed from /proc/cpuinfo
+/// and other system files, including detailed cache information, CPU flags,
+/// core counts, and frequency data.
 pub struct LinuxCpuInfo {
     /// CPU model name (e.g., "AMD Ryzen 5 9600X 6-Core Processor")
     model: String,
@@ -19,8 +22,8 @@ pub struct LinuxCpuInfo {
     physical_cores: u32,
     /// Number of logical CPU cores (threads)
     logical_cores: u32,
-    /// Base CPU frequency in GHz (if available)
-    base_mhz: Option<f32>,
+    /// Maximum CPU frequency in GHz (if available)
+    max_mhz: Option<f32>,
     /// L1 data cache size (per core, total) in KB
     l1d_size: Option<(u32, u32)>, // (per core, total)
     /// L1 instruction cache size (per core, total) in KB
@@ -32,108 +35,61 @@ pub struct LinuxCpuInfo {
 }
 
 impl LinuxCpuInfo {
-    /// Parse and return Linux CPU information from /proc/cpuinfo and sysfs.
+    /// Parse and return Linux CPU information from /proc/cpuinfo and system files.
     ///
-    /// This function attempts to extract model name, vendor, core/thread counts, cache sizes, and max frequency.
-    /// It prefers sysfs for cache and frequency info, falling back to /proc/cpuinfo if needed.
+    /// This function reads directly from /proc/cpuinfo to extract CPU model name, vendor,
+    /// core/thread counts, cache sizes, frequency information, CPU flags, and byte order.
+    ///
+    /// The function attempts to gather comprehensive CPU information by:
+    /// - Parsing /proc/cpuinfo for basic CPU details, flags, and cache information
+    /// - Using uname to determine system architecture
+    /// - Reading cpufreq information for maximum frequency data
+    /// - Calculating physical and logical core counts from processor entries
+    ///
+    /// # Returns
+    ///
+    /// Returns `Ok(LinuxCpuInfo)` on success, or `Err(String)` with error description on failure.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if:
+    /// - /proc/cpuinfo cannot be read
+    /// - uname command fails to execute
+    /// - Critical CPU information cannot be parsed
     pub fn new() -> Result<Self, String> {
-        // Get CPU information using lscpu
-        let output = Command::new("lscpu")
-            .output()
-            .map_err(|e| e.to_string())?;
+        // Read /proc/cpuinfo directly
+        let cpuinfo_content = fs::read_to_string("/proc/cpuinfo")
+        .map_err(|e| format!("Failed to read /proc/cpuinfo: {}", e))?;
 
-        let output_str = String::from_utf8_lossy(&output.stdout);
-        
         // Get architecture using uname
         let uname_output = Command::new("uname")
-            .args(["-m"])
-            .output()
-            .map_err(|e| e.to_string())?;
+        .args(["-m"])
+        .output()
+        .map_err(|e| format!("Failed to get architecture: {}", e))?;
         let architecture = String::from_utf8_lossy(&uname_output.stdout).trim().to_string();
-        
-        // Parse the output
-        let mut model = String::new();
-        let mut vendor = String::new();
-        let mut byte_order = String::new();
-        let mut flags = String::new();
-        let mut physical_cores = 0;
-        let mut logical_cores = 0;
-        let mut base_mhz = None;
-        let mut l1d_size = None;
-        let mut l1i_size = None;
-        let mut l2_size = None;
-        let mut l3_size = None;
 
-        let mut collecting_flags = false;
-        for line in output_str.lines() {
-            if line.starts_with("Model name:") {
-                model = line.split("Model name:").nth(1).unwrap_or("").trim().to_string();
-            } else if line.starts_with("Vendor ID:") {
-                vendor = line.split("Vendor ID:").nth(1).unwrap_or("").trim().to_string();
-            } else if line.starts_with("Byte Order:") {
-                byte_order = line.split("Byte Order:").nth(1).unwrap_or("").trim().to_string();
-            } else if line.starts_with("Flags:") {
-                collecting_flags = true;
-                flags = line.split("Flags:").nth(1).unwrap_or("").trim().to_string();
-            } else if collecting_flags && line.starts_with(" ") {
-                flags.push_str(" ");
-                flags.push_str(line.trim());
-            } else {
-                collecting_flags = false;
-            }
-            if line.starts_with("CPU(s):") {
-                logical_cores = line.split("CPU(s):").nth(1).unwrap_or("0").trim().parse().unwrap_or(0);
-            } else if line.starts_with("Core(s) per socket:") {
-                let cores_per_socket: u32 = line.split("Core(s) per socket:").nth(1).unwrap_or("0").trim().parse().unwrap_or(0);
-                let sockets: u32 = output_str.lines()
-                    .find(|l| l.starts_with("Socket(s):"))
-                    .and_then(|l| l.split("Socket(s):").nth(1))
-                    .and_then(|s| s.trim().parse().ok())
-                    .unwrap_or(1);
-                physical_cores = cores_per_socket * sockets;
-            } else if line.starts_with("CPU max MHz:") {
-                let mhz = line.split("CPU max MHz:").nth(1).unwrap_or("0").trim().parse::<f32>().unwrap_or(0.0);
-                base_mhz = Some(mhz / 1000.0); // Convert MHz to GHz
-            } else if line.starts_with("L1d cache:") {
-                let parts: Vec<&str> = line.split("L1d cache:").nth(1).unwrap_or("").trim().split_whitespace().collect();
-                if parts.len() >= 2 {
-                    let size = parts[0].parse::<u32>().unwrap_or(0);
-                    let instances = parts[1].trim_matches(|c| c == '(' || c == ')' || c == 'i' || c == 'n' || c == 's' || c == 't' || c == 'a' || c == 'c' || c == 'e' || c == 's').parse::<u32>().unwrap_or(0);
-                    l1d_size = Some((size, size * instances));
-                }
-            } else if line.starts_with("L1i cache:") {
-                let parts: Vec<&str> = line.split("L1i cache:").nth(1).unwrap_or("").trim().split_whitespace().collect();
-                if parts.len() >= 2 {
-                    let size = parts[0].parse::<u32>().unwrap_or(0);
-                    let instances = parts[1].trim_matches(|c| c == '(' || c == ')' || c == 'i' || c == 'n' || c == 's' || c == 't' || c == 'a' || c == 'c' || c == 'e' || c == 's').parse::<u32>().unwrap_or(0);
-                    l1i_size = Some((size, size * instances));
-                }
-            } else if line.starts_with("L2 cache:") {
-                let parts: Vec<&str> = line.split("L2 cache:").nth(1).unwrap_or("").trim().split_whitespace().collect();
-                if parts.len() >= 2 {
-                    let size = parts[0].parse::<u32>().unwrap_or(0);
-                    let instances = parts[1].trim_matches(|c| c == '(' || c == ')' || c == 'i' || c == 'n' || c == 's' || c == 't' || c == 'a' || c == 'c' || c == 'e' || c == 's').parse::<u32>().unwrap_or(0);
-                    l2_size = Some((size, size * instances));
-                }
-            } else if line.starts_with("L3 cache:") {
-                let parts: Vec<&str> = line.split("L3 cache:").nth(1).unwrap_or("").trim().split_whitespace().collect();
-                if parts.len() >= 2 {
-                    let size = parts[0].parse::<u32>().unwrap_or(0);
-                    let instances = parts[1].trim_matches(|c| c == '(' || c == ')' || c == 'i' || c == 'n' || c == 's' || c == 't' || c == 'a' || c == 'c' || c == 'e' || c == 's').parse::<u32>().unwrap_or(0);
-                    l3_size = Some((size, size * instances));
-                }
-            }
-        }
+        // Parse /proc/cpuinfo
+        let parsed_info = Self::parse_cpuinfo(&cpuinfo_content)?;
+
+        // Get byte order information
+        let byte_order = Self::get_byte_order();
+
+        // Get maximum frequency
+        let max_mhz = Self::get_max_frequency().or(parsed_info.max_mhz);
+
+        // Get cache information using getconf (fallback to /proc/cpuinfo values)
+        let (l1d_size, l1i_size, l2_size, l3_size) = Self::get_cache_info(parsed_info.physical_cores)
+        .unwrap_or((parsed_info.l1d_size, parsed_info.l1i_size, parsed_info.l2_size, parsed_info.l3_size));
 
         Ok(LinuxCpuInfo {
-            model,
-            vendor,
+            model: parsed_info.model,
+            vendor: parsed_info.vendor,
             architecture,
             byte_order,
-            flags,
-            physical_cores,
-            logical_cores,
-            base_mhz,
+            flags: parsed_info.flags,
+            physical_cores: parsed_info.physical_cores,
+            logical_cores: parsed_info.logical_cores,
+            max_mhz,
             l1d_size,
             l1i_size,
             l2_size,
@@ -141,20 +97,265 @@ impl LinuxCpuInfo {
         })
     }
 
+    /// Parse CPU information from /proc/cpuinfo content.
+    ///
+    /// This function processes the raw content of /proc/cpuinfo and extracts
+    /// relevant CPU information including model name, vendor, flags, core counts,
+    /// and cache sizes.
+    ///
+    /// # Arguments
+    ///
+    /// * `content` - The raw string content of /proc/cpuinfo
+    ///
+    /// # Returns
+    ///
+    /// Returns a `ParsedCpuInfo` struct containing the extracted information,
+    /// or an error string if parsing fails.
+    fn parse_cpuinfo(content: &str) -> Result<ParsedCpuInfo, String> {
+        let mut model = String::new();
+        let mut vendor = String::new();
+        let mut flags = String::new();
+        let mut cache_size = None;
+        let mut max_mhz = None;
+
+        // Track unique physical IDs and core IDs for accurate counting
+        let mut physical_ids = std::collections::HashSet::new();
+        let mut core_ids = std::collections::HashSet::new();
+        let mut logical_cores = 0;
+
+        // Parse each processor entry
+        for processor_block in content.split("\n\n") {
+            if processor_block.trim().is_empty() {
+                continue;
+            }
+
+            logical_cores += 1;
+            let mut current_physical_id = None;
+            let mut current_core_id = None;
+
+            for line in processor_block.lines() {
+                let line = line.trim();
+                if line.is_empty() {
+                    continue;
+                }
+
+                if let Some((key, value)) = line.split_once(':') {
+                    let key = key.trim();
+                    let value = value.trim();
+
+                    match key {
+                        "model name" => {
+                            if model.is_empty() {
+                                model = value.to_string();
+                            }
+                        },
+                        "vendor_id" => {
+                            if vendor.is_empty() {
+                                vendor = value.to_string();
+                            }
+                        },
+                        "flags" => {
+                            if flags.is_empty() {
+                                flags = value.to_string();
+                            }
+                        },
+                        "cache size" => {
+                            if cache_size.is_none() {
+                                // Parse cache size (e.g., "1024 KB" -> 1024)
+                                if let Some(size_str) = value.split_whitespace().next() {
+                                    cache_size = size_str.parse::<u32>().ok();
+                                }
+                            }
+                        },
+                        "cpu MHz" => {
+                            // Track the highest frequency seen
+                            if let Ok(mhz) = value.parse::<f32>() {
+                                max_mhz = Some(max_mhz.map_or(mhz, |current: f32| current.max(mhz)));
+                            }
+                        },
+                        "physical id" => {
+                            if let Ok(id) = value.parse::<u32>() {
+                                current_physical_id = Some(id);
+                            }
+                        },
+                        "core id" => {
+                            if let Ok(id) = value.parse::<u32>() {
+                                current_core_id = Some(id);
+                            }
+                        },
+                        _ => {}
+                    }
+                }
+            }
+
+            // Track unique physical and core IDs
+            if let Some(phys_id) = current_physical_id {
+                physical_ids.insert(phys_id);
+            }
+            if let (Some(phys_id), Some(core_id)) = (current_physical_id, current_core_id) {
+                core_ids.insert((phys_id, core_id));
+            }
+        }
+
+        // Calculate physical cores
+        let physical_cores = if !core_ids.is_empty() {
+            core_ids.len() as u32
+        } else if !physical_ids.is_empty() {
+            // Fallback: assume single core per physical ID if core IDs aren't available
+            physical_ids.len() as u32
+        } else {
+            // Last resort: assume single physical core
+            1
+        };
+
+        // Convert max MHz to GHz
+        let max_mhz = max_mhz.map(|mhz| mhz / 1000.0);
+
+        // For cache sizes, we'll use the cache size from /proc/cpuinfo as L2 cache
+        // and try to infer other cache levels (this is a limitation of /proc/cpuinfo)
+        let l2_size = cache_size.map(|size| (size, size * physical_cores));
+
+        Ok(ParsedCpuInfo {
+            model,
+            vendor,
+            flags,
+            physical_cores,
+            logical_cores,
+            max_mhz,
+            l1d_size: None, // Not typically available in /proc/cpuinfo
+            l1i_size: None, // Not typically available in /proc/cpuinfo
+            l2_size,
+            l3_size: None, // Not typically available in /proc/cpuinfo
+        })
+    }
+
+    /// Determine the system's byte order.
+    ///
+    /// This function determines whether the system uses little-endian or big-endian
+    /// byte ordering by checking the native byte order of the current architecture.
+    ///
+    /// # Returns
+    ///
+    /// Returns a string indicating the byte order: "Little Endian" or "Big Endian".
+    fn get_byte_order() -> String {
+        if cfg!(target_endian = "little") {
+            "Little Endian".to_string()
+        } else {
+            "Big Endian".to_string()
+        }
+    }
+
+    /// Get maximum CPU frequency from cpufreq information.
+    ///
+    /// This function attempts to read the maximum CPU frequency from the Linux
+    /// cpufreq subsystem by checking scaling_max_freq files for all CPU cores.
+    ///
+    /// # Returns
+    ///
+    /// Returns `Some(f32)` with the maximum frequency in GHz if available,
+    /// or `None` if the information cannot be read.
+    fn get_max_frequency() -> Option<f32> {
+        // Try to read from cpufreq
+        if let Ok(entries) = fs::read_dir("/sys/devices/system/cpu") {
+            let mut max_freq = 0u64;
+
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                    if name.starts_with("cpu") && name[3..].chars().all(|c| c.is_ascii_digit()) {
+                        let freq_path = path.join("cpufreq/scaling_max_freq");
+                        if let Ok(freq_str) = fs::read_to_string(&freq_path) {
+                            if let Ok(freq) = freq_str.trim().parse::<u64>() {
+                                max_freq = max_freq.max(freq);
+                            }
+                        }
+                    }
+                }
+            }
+
+            if max_freq > 0 {
+                // Convert from kHz to GHz
+                return Some((max_freq as f32) / 1_000_000.0);
+            }
+        }
+
+        None
+    }
+
+    /// Get detailed cache information using getconf.
+    ///
+    /// This function uses the `getconf` command to retrieve accurate cache information
+    /// for all cache levels (L1 data, L1 instruction, L2, and L3). This method is more
+    /// reliable than parsing sysfs or /proc/cpuinfo as it provides standardized cache
+    /// information directly from the system configuration.
+    ///
+    /// # Arguments
+    ///
+    /// * `physical_cores` - Number of physical CPU cores for calculating total cache sizes
+    ///
+    /// # Returns
+    ///
+    /// Returns a tuple of optional cache sizes in the format:
+    /// `(L1d, L1i, L2, L3)` where each element is `Option<(per_core_kb, total_kb)>`
+    fn get_cache_info(physical_cores: u32) -> Option<(Option<(u32, u32)>, Option<(u32, u32)>, Option<(u32, u32)>, Option<(u32, u32)>)> {
+        let mut l1d_size = None;
+        let mut l1i_size = None;
+        let mut l2_size = None;
+        let mut l3_size = None;
+
+        // Try to get cache information using getconf
+        let cache_vars = [
+            ("LEVEL1_DCACHE_SIZE", &mut l1d_size),
+            ("LEVEL1_ICACHE_SIZE", &mut l1i_size),
+            ("LEVEL2_CACHE_SIZE", &mut l2_size),
+            ("LEVEL3_CACHE_SIZE", &mut l3_size),
+        ];
+
+        for (var_name, cache_ref) in cache_vars {
+            if let Ok(output) = Command::new("getconf").arg(var_name).output() {
+                if output.status.success() {
+                    let size_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                    if let Ok(size_bytes) = size_str.parse::<u32>() {
+                        if size_bytes > 0 {
+                            let size_kb = size_bytes / 1024;
+                            // For L1 and L2 caches, multiply by physical cores (per-core caches)
+                            // For L3 cache, it's typically shared across all cores
+                            let total_kb = if var_name.contains("LEVEL3") {
+                                size_kb // L3 is usually shared
+                            } else {
+                                size_kb * physical_cores // L1 and L2 are usually per-core
+                            };
+                            *cache_ref = Some((size_kb, total_kb));
+                        }
+                    }
+                }
+            }
+        }
+
+        Some((l1d_size, l1i_size, l2_size, l3_size))
+    }
+
     /// Print the CPU information in a horizontally aligned format with the vendor logo.
+    ///
+    /// This function displays comprehensive CPU information in a formatted layout
+    /// alongside the appropriate vendor logo. The output includes CPU model, architecture,
+    /// vendor information, frequency data, core counts, cache sizes, and CPU flags.
+    ///
+    /// The CPU flags are automatically wrapped to fit within the display width,
+    /// and all information is aligned for easy reading.
     pub fn display_info(&self) {
         let logo_lines = get_logo_lines_for_vendor(&self.vendor).unwrap_or_else(|| vec![]);
-        let mut info_lines = vec![
+        let info_lines = vec![
             format!("Name: {:<30}", self.model),
-            format!("Architecture: {:<30}", self.architecture),
-            format!("Byte Order: {:<30}", self.byte_order),
-            format!("Vendor: {:<30}", self.vendor),
-            format!("Max Frequency: {:>7}", match self.base_mhz { Some(ghz) => format!("{:.3} GHz", ghz), None => "Unknown".to_string() }),
-            format!("Cores: {:>2} cores ({} threads)", self.physical_cores, self.logical_cores),
-            format!("L1i Size: {}", match self.l1i_size { Some((per, _)) => format!("{}KB", per), None => "Unknown".to_string() }),
-            format!("L1d Size: {}", match self.l1d_size { Some((per, _)) => format!("{}KB", per), None => "Unknown".to_string() }),
-            format!("L2 Size: {}", match self.l2_size { Some((per, _)) => format!("{}KB", per), None => "Unknown".to_string() }),
-            format!("L3 Size: {}", match self.l3_size { Some((per, _)) => format!("{}KB", per), None => "Unknown".to_string() }),
+                format!("Architecture: {:<30}", self.architecture),
+                    format!("Byte Order: {:<30}", self.byte_order),
+                        format!("Vendor: {:<30}", self.vendor),
+                            format!("Max Frequency: {:>7}", match self.max_mhz { Some(ghz) => format!("{:.3} GHz", ghz), None => "Unknown".to_string() }),
+                                format!("Cores: {:>2} cores ({} threads)", self.physical_cores, self.logical_cores),
+                                    format!("L1i Size: {}", match self.l1i_size { Some((_, total)) => Self::format_cache_size(total), None => "Unknown".to_string() }),
+                                        format!("L1d Size: {}", match self.l1d_size { Some((_, total)) => Self::format_cache_size(total), None => "Unknown".to_string() }),
+                                            format!("L2 Size: {}", match self.l2_size { Some((_, total)) => Self::format_cache_size(total), None => "Unknown".to_string() }),
+                                                format!("L3 Size: {}", match self.l3_size { Some((_, total)) => Self::format_cache_size(total), None => "Unknown".to_string() }),
         ];
 
         let logo_width = logo_lines.iter().map(|l| l.chars().count()).max().unwrap_or(0);
@@ -205,4 +406,52 @@ impl LinuxCpuInfo {
             println!("{:<width$}{}{}", logo, sep, info.as_str(), width=logo_width);
         }
     }
+
+    /// Format cache size with appropriate units (KB or MB).
+    ///
+    /// This helper function formats cache sizes in a human-readable format,
+    /// converting sizes above 1000KB to megabytes with decimal precision.
+    ///
+    /// # Arguments
+    ///
+    /// * `size_kb` - Cache size in kilobytes
+    ///
+    /// # Returns
+    ///
+    /// Returns a formatted string with appropriate units (e.g., "288KB" or "6.0MB")
+    fn format_cache_size(size_kb: u32) -> String {
+        if size_kb >= 1000 {
+            let size_mb = size_kb as f32 / 1024.0;
+            format!("{:.1}MB", size_mb)
+        } else {
+            format!("{}KB", size_kb)
+        }
+    }
+}
+
+/// Intermediate struct for holding parsed CPU information from /proc/cpuinfo.
+///
+/// This struct is used internally during the parsing process to collect
+/// information before creating the final `LinuxCpuInfo` struct.
+struct ParsedCpuInfo {
+    /// CPU model name
+    model: String,
+    /// CPU vendor ID
+    vendor: String,
+    /// CPU flags string
+    flags: String,
+    /// Number of physical CPU cores
+    physical_cores: u32,
+    /// Number of logical CPU cores (threads)
+    logical_cores: u32,
+    /// Maximum CPU frequency in GHz
+    max_mhz: Option<f32>,
+    /// L1 data cache information
+    l1d_size: Option<(u32, u32)>,
+    /// L1 instruction cache information
+    l1i_size: Option<(u32, u32)>,
+    /// L2 cache information
+    l2_size: Option<(u32, u32)>,
+    /// L3 cache information
+    l3_size: Option<(u32, u32)>,
 }

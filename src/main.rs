@@ -16,7 +16,7 @@ struct Args {
 }
 
 fn main() {
-    let args = Args::parse();
+    let _args = Args::parse();
 
     // Detect OS and use appropriate module
     let os = env::consts::OS;
