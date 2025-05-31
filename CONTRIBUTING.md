@@ -5,91 +5,638 @@ Thank you for your interest in contributing to **rcpufetch**! This document will
 ## Table of Contents
 - [Project Overview](#project-overview)
 - [Codebase Structure](#codebase-structure)
+- [Architecture Overview](#architecture-overview)
+- [Linux Implementation Deep Dive](#linux-implementation-deep-dive)
 - [How to Contribute](#how-to-contribute)
 - [Adding Features for Each OS](#adding-features-for-each-os)
+- [ASCII Art and Logo System](#ascii-art-and-logo-system)
 - [Coding Style](#coding-style)
+- [Testing Guidelines](#testing-guidelines)
 - [Reporting Issues](#reporting-issues)
 - [Pull Request Process](#pull-request-process)
 
 ## Project Overview
 
-**rcpufetch** is a fast, cross-platform CLI tool that displays detailed CPU information in a visually appealing way, including vendor ASCII art. It is written in Rust and aims to support Linux, and potentially other operating systems in the future.
+**rcpufetch** is a fast, cross-platform CLI tool that displays detailed CPU information in a visually appealing way, including vendor ASCII art. It is written in Rust and currently supports Linux and Windows, with plans for additional operating system support.
+
+The tool provides comprehensive CPU information including:
+- CPU model name and vendor
+- Architecture and byte order information
+- Physical and logical core counts
+- Maximum frequency information
+- Multi-level cache sizes (L1, L2, L3)
+- CPU flags and capabilities
+- Colorized vendor logos displayed alongside the information
 
 ## Codebase Structure
 
-The project is organized as follows:
+The project follows a modular, OS-specific architecture:
 
 ```
 rcpufetch/
-├── Cargo.toml
+├── Cargo.toml               # Project dependencies and metadata
 ├── src/
-│   ├── main.rs           # Entry point, handles CLI and OS dispatch
-│   ├── linux/            # Linux-specific code
-│   │   ├── linux.rs      # Linux CPU info parsing and display logic
-│   │   └── mod.rs        # Linux module declaration
-│   ├── art/              # ASCII art and logo rendering
-│   │   ├── logos.rs      # Vendor ASCII art and color codes
-│   │   └── mod.rs        # Art module declaration
+│   ├── main.rs             # Entry point, CLI parsing, OS dispatch
+│   ├── linux/              # Linux-specific implementation
+│   │   ├── linux.rs        # Core Linux CPU info parsing and display
+│   │   └── mod.rs          # Linux module declaration
+│   ├── windows/            # Windows-specific implementation
+│   │   ├── windows.rs      # Windows CPU info via PowerShell/WMI
+│   │   └── mod.rs          # Windows module declaration
+│   └── art/                # ASCII art and visual components
+│       ├── logos.rs        # Vendor ASCII art and color definitions
+│       └── mod.rs          # Art module declaration
 ```
 
-- **src/main.rs**: Entry point. Detects OS and calls the appropriate module (currently Linux only).
-- **src/linux/linux.rs**: All Linux-specific logic for parsing `/proc/cpuinfo`, sysfs, and formatting output.
-- **src/art/logos.rs**: Contains ASCII art for CPU vendors and color constants.
+### Key Files Explained
+
+- **`src/main.rs`**: Entry point that handles CLI argument parsing using `clap`, detects the operating system, and dispatches to the appropriate OS-specific module.
+- **`src/linux/linux.rs`**: Contains the complete Linux implementation including `/proc/cpuinfo` parsing, sysfs cache information reading, and formatted display output.
+- **`src/windows/windows.rs`**: Windows implementation using PowerShell and WMI queries to gather CPU information.
+- **`src/art/logos.rs`**: Contains ASCII art for different CPU vendors (AMD, Intel, ARM, NVIDIA) with color formatting support.
+
+## Architecture Overview
+
+The application follows a consistent pattern across operating systems:
+
+1. **OS Detection**: `main.rs` uses `std::env::consts::OS` to detect the current operating system
+2. **Module Dispatch**: Based on OS detection, the appropriate module is called (Linux, Windows, etc.)
+3. **Information Gathering**: Each OS module implements a `new()` method that gathers CPU information using OS-specific APIs
+4. **Display Formatting**: Each module implements a `display_info()` method that formats and displays the information alongside vendor logos
+
+### Common Struct Pattern
+
+Each OS implementation follows this pattern:
+
+```rust
+pub struct OSCpuInfo {
+    model: String,
+    vendor: String,
+    // ... OS-specific fields
+}
+
+impl OSCpuInfo {
+    pub fn new() -> Result<Self, String> {
+        // OS-specific information gathering
+    }
+    
+    pub fn display_info(&self) {
+        // Formatted display with logo
+    }
+}
+```
+
+## Linux Implementation Deep Dive
+
+The Linux implementation in `src/linux/linux.rs` is the most comprehensive and serves as the reference implementation. Understanding this code is crucial for contributors.
+
+### Data Sources
+
+The Linux implementation gathers information from multiple sources:
+
+1. **`/proc/cpuinfo`**: Primary source for CPU model, vendor, flags, core counts, and basic frequency information
+2. **`/sys/devices/system/cpu/cpu*/cache/`**: Detailed cache information (L1, L2, L3 sizes and characteristics)
+3. **`/sys/devices/system/cpu/cpu*/cpufreq/`**: CPU frequency scaling information
+4. **`uname -m`**: System architecture information
+
+### LinuxCpuInfo Structure
+
+```rust
+pub struct LinuxCpuInfo {
+    model: String,          // CPU model name from /proc/cpuinfo
+    vendor: String,         // Vendor ID (AuthenticAMD, GenuineIntel, etc.)
+    architecture: String,   // Architecture from uname (x86_64, aarch64, etc.)
+    byte_order: String,     // Little/Big Endian from compile-time detection
+    flags: String,          // CPU capabilities/flags from /proc/cpuinfo
+    physical_cores: u32,    // Physical core count (calculated from unique core IDs)
+    logical_cores: u32,     // Logical core count (thread count)
+    max_mhz: Option<f32>,   // Maximum frequency in GHz
+    l1d_size: Option<(u32, u32)>,  // L1 data cache (per-core, total) in KB
+    l1i_size: Option<(u32, u32)>,  // L1 instruction cache (per-core, total) in KB
+    l2_size: Option<(u32, u32)>,   // L2 cache (per-core, total) in KB
+    l3_size: Option<(u32, u32)>,   // L3 cache (per-core, total) in KB
+}
+```
+
+### Core Count Calculation
+
+The Linux implementation uses a sophisticated approach to calculate physical vs logical cores:
+
+1. **Parse processor entries**: Each logical core appears as a separate "processor" entry in `/proc/cpuinfo`
+2. **Track physical IDs**: The "physical id" field identifies separate CPU sockets
+3. **Track core IDs**: The "core id" field identifies separate cores within a socket
+4. **Calculate physical cores**: Count unique `(physical_id, core_id)` pairs
+5. **Calculate logical cores**: Count total processor entries
+
+This approach correctly handles:
+- Single-socket systems with multiple cores
+- Multi-socket systems
+- Hyperthreading/SMT configurations
+- Systems without explicit physical/core ID information
+
+### Cache Information Parsing
+
+The implementation uses a two-tier approach for cache information:
+
+1. **Primary source - sysfs**: Reads from `/sys/devices/system/cpu/cpu0/cache/index*/` for detailed cache information
+2. **Fallback - /proc/cpuinfo**: Uses "cache size" field when sysfs is unavailable
+
+#### Sysfs Cache Parsing Process
+
+```rust
+// For each cache index in /sys/devices/system/cpu/cpu0/cache/
+// Read level (1, 2, 3), type (Data, Instruction, Unified), and size
+// Calculate totals based on sharing characteristics:
+// - L1/L2: typically per-core, multiply by physical core count
+// - L3: typically shared across all cores, use raw value
+```
+
+### Frequency Information
+
+Multiple sources are checked for frequency information:
+1. **cpufreq scaling_max_freq**: Preferred source from `/sys/devices/system/cpu/cpu*/cpufreq/scaling_max_freq`
+2. **cpuinfo CPU MHz**: Fallback from `/proc/cpuinfo` "cpu MHz" field
+3. **Conversion**: All frequencies converted to GHz for consistent display
+
+### Display Formatting
+
+The `display_info()` method implements sophisticated formatting:
+
+1. **Logo integration**: Retrieves vendor-specific ASCII art
+2. **Side-by-side layout**: Displays logo and information in aligned columns
+3. **Flag wrapping**: Automatically wraps long CPU flag lists with proper indentation
+4. **Cache size formatting**: Converts KB to MB when appropriate (>1000KB)
+5. **Alignment**: Ensures consistent spacing and readability
+
+### Error Handling
+
+The Linux implementation uses comprehensive error handling:
+- File I/O errors are wrapped with descriptive messages
+- Missing information is handled gracefully with `None` values
+- Parsing errors fall back to default values where appropriate
+- All public methods return `Result<T, String>` for proper error propagation
 
 ## How to Contribute
 
-1. **Fork the repository** and clone your fork locally.
+### Prerequisites
+
+Before contributing, ensure you have:
+- **Rust toolchain**: Install via [rustup.rs](https://rustup.rs/)
+- **Git**: For version control
+- **Target OS**: Access to the OS you're developing for (Linux, Windows, etc.)
+
+### Development Workflow
+
+1. **Fork the repository** and clone your fork locally:
+   ```bash
+   git clone https://github.com/yourusername/rcpufetch.git
+   cd rcpufetch
+   ```
+
 2. **Create a new branch** for your feature or bugfix:
+   ```bash
+   git checkout -b feature/my-new-feature
    ```
-   git checkout -b my-feature
-   ```
-3. **Make your changes**. See [Adding Features for Each OS](#adding-features-for-each-os) below for tips.
-4. **Test your changes** locally:
-   ```
+
+3. **Build and test** the project:
+   ```bash
+   cargo build
    cargo run
    ```
-5. **Commit and push** your branch:
+
+4. **Make your changes** following the guidelines in this document
+
+5. **Test thoroughly**:
+   ```bash
+   # Test on your development system
+   cargo run
+   
+   # Test different scenarios if applicable
+   cargo run -- --no-logo
+   
+   # Check for compilation warnings
+   cargo clippy
+   
+   # Format your code
+   cargo fmt
    ```
+
+6. **Commit and push** your changes:
+   ```bash
    git add .
-   git commit -m "Describe your change"
-   git push origin my-feature
+   git commit -m "feat: add support for CPU temperature readings"
+   git push origin feature/my-new-feature
    ```
-6. **Open a Pull Request** on GitHub. Describe your changes and reference any related issues.
+
+7. **Open a Pull Request** on GitHub with:
+   - Clear description of changes
+   - Reference to any related issues
+   - Screenshots/examples if relevant
+   - Testing information
+
+### Development Tips
+
+- **Use cargo watch**: Install with `cargo install cargo-watch`, then run `cargo watch -x run` for automatic rebuilds
+- **Test on multiple systems**: If possible, test your changes on different CPU architectures and OS versions
+- **Check edge cases**: Consider systems with unusual configurations (very old CPUs, virtual machines, containers)
+- **Performance considerations**: The tool should remain fast and lightweight
 
 ## Adding Features for Each OS
 
-### Linux
-- All Linux-specific code lives in `src/linux/linux.rs`.
-- To add a new field (e.g., CPU temperature):
-  1. Parse the relevant file in `/proc` or `/sys`.
-  2. Add a new field to the `LinuxCpuInfo` struct.
-  3. Update the `new()` method to extract and store the value.
-  4. Update `display_info()` to print the new field.
-- For new logo art, add it to `src/art/logos.rs` and update the vendor match logic.
+### Linux Development Guidelines
 
-### Other OSes
-- To add support for another OS (e.g., Solaris, Haiku, etc):
-  1. Create a new folder under `src/` (e.g., `src/haiku/`).
-  2. Implement a module similar to `src/linux/linux.rs` for that OS.
-  3. Add a `mod.rs` in the new folder.
-  4. Update `main.rs` to detect the OS and call your new module.
-  5. Add OS-specific ASCII art to `src/art/logos.rs` if needed.
+Since Linux is the reference implementation, most new features should be implemented here first.
+
+#### Adding New CPU Information Fields
+
+To add a new field (e.g., CPU temperature, power consumption, microcode version):
+
+1. **Add the field to `LinuxCpuInfo`**:
+   ```rust
+   pub struct LinuxCpuInfo {
+       // ...existing fields...
+       temperature: Option<f32>,  // New field
+   }
+   ```
+
+2. **Implement parsing logic**:
+   ```rust
+   impl LinuxCpuInfo {
+       fn get_temperature() -> Option<f32> {
+           // Read from /sys/class/thermal/ or /sys/class/hwmon/
+           // Parse temperature data
+           // Return temperature in Celsius
+       }
+   }
+   ```
+
+3. **Update the `new()` method**:
+   ```rust
+   pub fn new() -> Result<Self, String> {
+       // ...existing parsing...
+       let temperature = Self::get_temperature();
+       
+       Ok(LinuxCpuInfo {
+           // ...existing fields...
+           temperature,
+       })
+   }
+   ```
+
+4. **Update the `display_info()` method**:
+   ```rust
+   let info_lines = vec![
+       // ...existing lines...
+       format!("Temperature: {}", match self.temperature {
+           Some(temp) => format!("{:.1}°C", temp),
+           None => "Unknown".to_string()
+       }),
+   ];
+   ```
+
+#### Working with Linux System Files
+
+Common data sources and their purposes:
+
+- **`/proc/cpuinfo`**: Basic CPU information, vendor, model, flags
+- **`/sys/devices/system/cpu/`**: CPU-specific information, frequency scaling, cache details
+- **`/sys/class/thermal/`**: Temperature sensors
+- **`/sys/class/hwmon/`**: Hardware monitoring (temperatures, voltages, fan speeds)
+- **`/proc/meminfo`**: Memory information (if adding memory features)
+- **`/proc/loadavg`**: System load information
+
+#### Error Handling Best Practices
+
+```rust
+// Good: Descriptive error messages
+let content = fs::read_to_string("/proc/cpuinfo")
+    .map_err(|e| format!("Failed to read /proc/cpuinfo: {}", e))?;
+
+// Good: Graceful fallbacks
+let temperature = Self::get_temperature().unwrap_or_else(|| {
+    eprintln!("Warning: Could not read CPU temperature");
+    None
+});
+
+// Good: Use Result<T, String> for functions that can fail
+fn parse_cache_size(size_str: &str) -> Result<u32, String> {
+    // parsing logic
+}
+```
+
+### Windows Development Guidelines
+
+The Windows implementation uses PowerShell and WMI queries to gather system information.
+
+#### Windows-Specific Considerations
+
+- **PowerShell dependency**: Commands must work on PowerShell 5.1+ (Windows 10/11 default)
+- **WMI classes**: Use established WMI classes like `Win32_Processor`, `Win32_CacheMemory`
+- **JSON parsing**: PowerShell output is converted to JSON for easy parsing
+- **Error handling**: PowerShell commands can fail; implement proper fallbacks
+
+#### Adding Windows Features
+
+1. **Research WMI classes**: Find the appropriate WMI class for your data
+2. **Test PowerShell commands**: Verify commands work across Windows versions
+3. **Update `WindowsCpuInfo`**: Add fields and parsing logic
+4. **Handle differences**: Windows may provide different information than Linux
+
+### Adding Support for New Operating Systems
+
+To add support for a new OS (e.g., macOS, FreeBSD, Solaris):
+
+1. **Create OS directory structure**:
+   ```
+   src/
+   ├── macos/           # New OS directory
+   │   ├── macos.rs     # Implementation file
+   │   └── mod.rs       # Module declaration
+   ```
+
+2. **Implement the standard interface**:
+   ```rust
+   pub struct MacOSCpuInfo {
+       model: String,
+       vendor: String,
+       // OS-specific fields
+   }
+   
+   impl MacOSCpuInfo {
+       pub fn new() -> Result<Self, String> {
+           // OS-specific information gathering
+       }
+       
+       pub fn display_info(&self) {
+           // Display logic using get_logo_lines_for_vendor
+       }
+   }
+   ```
+
+3. **Update `main.rs`**:
+   ```rust
+   mod macos;  // Add module declaration
+   
+   match os {
+       "linux" => { /* existing code */ },
+       "windows" => { /* existing code */ },
+       "macos" => {
+           use crate::macos::macos::MacOSCpuInfo;
+           // Implementation
+       },
+       _ => { /* unsupported OS */ }
+   }
+   ```
+
+4. **Research OS-specific APIs**:
+   - **macOS**: `sysctl`, system_profiler, IOKit
+   - **FreeBSD**: `sysctl`, `/proc` (if mounted)
+   - **OpenBSD/NetBSD**: `sysctl`, machine-specific files
+   - **Solaris**: `psrinfo`, `kstat`
+
+## ASCII Art and Logo System
+
+The logo system in `src/art/logos.rs` provides vendor-specific ASCII art with color support.
+
+### Current Vendor Support
+
+- **AMD**: Red and white color scheme
+- **Intel**: Cyan color scheme
+- **ARM**: Cyan color scheme  
+- **NVIDIA**: Green and white color scheme
+
+### Adding New Vendor Logos
+
+1. **Create ASCII art**: Design ASCII art that fits within reasonable terminal width (< 50 characters)
+
+2. **Add color placeholders**:
+   ```rust
+   const ASCII_NEW_VENDOR: &str = "\
+   $C1  ####    ##  ##   ####     \n\
+   $C1 ##  ##  ##    ##  ##  ##   \n\
+   $C2 ##  ##  ########  ##  ##   \n\
+   $C1  ####    ##  ##   ####     \n";
+   ```
+
+3. **Update the vendor matching**:
+   ```rust
+   fn logo_lines_for_vendor(vendor_id: &str) -> Option<Vec<String>> {
+       let (raw_logo, colors): (&str, &[&str]) = match vendor_id {
+           // ...existing vendors...
+           "NewVendorID" => (ASCII_NEW_VENDOR, &[C_FG_BLUE, C_FG_WHITE]),
+           _ => return None,
+       };
+       // ...rest of function
+   }
+   ```
+
+### Color System
+
+Available colors are defined as ANSI escape sequences:
+- `C_FG_*`: Standard colors (black, red, green, yellow, blue, magenta, cyan, white)
+- `C_FG_B_*`: Bright variants
+- `COLOR_RESET`: Reset formatting
+
+Use `$C1`, `$C2`, etc. as placeholders in ASCII art, then specify the color array in the match statement.
 
 ## Coding Style
-- Use Rust doc comments (`///`) for all public structs, fields, and functions.
-- Keep code modular and prefer small, focused functions.
-- Use `Result<T, String>` for error handling in public APIs.
-- Follow [Rust formatting conventions](https://doc.rust-lang.org/1.0.0/style/style/whitespace.html).
+
+### Rust Conventions
+
+- **Follow rustfmt**: Use `cargo fmt` to format code automatically
+- **Use clippy**: Run `cargo clippy` and fix warnings
+- **Documentation**: Use `///` doc comments for all public items
+- **Error handling**: Use `Result<T, String>` for fallible operations
+- **Naming**: Use snake_case for variables/functions, PascalCase for types
+
+### Documentation Standards
+
+```rust
+/// Brief description of the function.
+///
+/// Longer description explaining the purpose, behavior, and any important
+/// details about the function's operation.
+///
+/// # Arguments
+///
+/// * `param1` - Description of the first parameter
+/// * `param2` - Description of the second parameter
+///
+/// # Returns
+///
+/// Description of what the function returns, including error conditions.
+///
+/// # Errors
+///
+/// This function will return an error if:
+/// - Specific error condition 1
+/// - Specific error condition 2
+///
+/// # Examples
+///
+/// ```
+/// let result = my_function("input");
+/// assert_eq!(result, expected_output);
+/// ```
+pub fn my_function(param1: &str, param2: u32) -> Result<String, String> {
+    // Implementation
+}
+```
+
+### Code Organization
+
+- **Small functions**: Keep functions focused and under 50 lines when possible
+- **Logical grouping**: Group related functionality together
+- **Constants**: Use `const` for values that don't change
+- **Error messages**: Make error messages descriptive and actionable
+
+### Performance Guidelines
+
+- **Avoid unnecessary allocations**: Use `&str` instead of `String` when possible
+- **Lazy evaluation**: Only compute expensive operations when needed
+- **Caching**: Cache expensive system calls when appropriate
+- **Early returns**: Use early returns to avoid deep nesting
+
+## Testing Guidelines
+
+### Manual Testing
+
+Since the project deals with system information, manual testing is crucial:
+
+1. **Test on target systems**: Run on actual hardware for the OS you're targeting
+2. **Test edge cases**: Try on systems with unusual configurations
+3. **Performance testing**: Ensure the tool remains fast even on slower systems
+4. **Output validation**: Verify that displayed information is accurate
+
+### Automated Testing Considerations
+
+While comprehensive unit testing is challenging for system information tools, consider:
+
+- **Parser testing**: Test parsing functions with known input data
+- **Error handling**: Test error conditions with invalid input
+- **Format testing**: Test output formatting functions
+- **Mock data**: Create sample `/proc/cpuinfo` files for testing
+
+### Testing Checklist
+
+Before submitting a PR, verify:
+- [ ] Compiles without warnings (`cargo build`)
+- [ ] Passes clippy checks (`cargo clippy`)
+- [ ] Formatted correctly (`cargo fmt`)
+- [ ] Works on intended operating system
+- [ ] Handles error conditions gracefully
+- [ ] Provides reasonable fallbacks for missing information
+- [ ] Output is readable and properly aligned
+- [ ] Performance is acceptable (< 1 second startup time)
 
 ## Reporting Issues
-- Please use GitHub Issues to report bugs, request features, or ask questions.
-- Include your OS, CPU model, and a copy of `/proc/cpuinfo` (if relevant).
+
+When reporting bugs or requesting features, please include:
+
+### For Bug Reports
+
+- **OS and version**: e.g., "Ubuntu 22.04", "Windows 11"
+- **CPU information**: Model, vendor, core count
+- **Error message**: Full error output if applicable
+- **Expected behavior**: What should have happened
+- **Steps to reproduce**: How to trigger the issue
+- **Output of relevant system files**: `/proc/cpuinfo` content for Linux issues
+
+### For Feature Requests
+
+- **Use case**: Why is this feature needed?
+- **OS scope**: Which operating systems should support this?
+- **Data source**: Where would this information come from?
+- **Priority**: How important is this feature?
+
+### Issue Templates
+
+Use these formats for consistency:
+
+```markdown
+**Bug Report**
+- OS: Ubuntu 22.04
+- CPU: AMD Ryzen 5 9600X
+- rcpufetch version: 0.1.0
+- Error: [paste error message]
+- Expected: [describe expected behavior]
+
+**Feature Request**
+- Feature: CPU temperature display
+- Rationale: Users want to monitor thermal performance
+- OS support: Linux (primary), Windows (future)
+- Data source: /sys/class/thermal/ on Linux
+```
 
 ## Pull Request Process
-- All PRs are reviewed for correctness, style, and clarity.
-- Please document your code and update this file if you add new major features or OS support.
-- Tests are not required but are encouraged for complex logic.
+
+### PR Guidelines
+
+1. **Single responsibility**: One feature or fix per PR
+2. **Descriptive title**: Use conventional commit format
+3. **Detailed description**: Explain what changes and why
+4. **Testing evidence**: Show that your changes work
+5. **Documentation updates**: Update docs if adding features
+
+### PR Template
+
+```markdown
+## Summary
+Brief description of the changes made.
+
+## Changes
+- Added CPU temperature monitoring for Linux
+- Updated display format to include temperature
+- Added error handling for missing thermal sensors
+
+## Testing
+- Tested on AMD Ryzen system with thermal sensors
+- Tested on older Intel system without sensors
+- Verified graceful fallback behavior
+
+## Screenshots (if applicable)
+[Include before/after screenshots]
+
+## Related Issues
+Closes #123
+```
+
+### Review Process
+
+1. **Automated checks**: Ensure CI passes (formatting, compilation)
+2. **Code review**: Maintainer will review code quality and design
+3. **Testing verification**: Changes will be tested on multiple systems
+4. **Documentation review**: Ensure docs are updated appropriately
+5. **Merge**: Once approved, changes will be merged
+
+### Commit Message Format
+
+Use conventional commit format:
+```
+type(scope): brief description
+
+Longer description if needed.
+
+- Detail 1
+- Detail 2
+```
+
+Types:
+- `feat`: New feature
+- `fix`: Bug fix
+- `docs`: Documentation updates
+- `style`: Code formatting
+- `refactor`: Code restructuring
+- `test`: Adding tests
+- `chore`: Maintenance tasks
+
+Examples:
+```
+feat(linux): add CPU temperature monitoring
+fix(windows): handle missing cache information gracefully
+docs(contributing): update Linux implementation details
+```
 
 ---
 
-Thank you for helping make **rcpufetch** better!
+Thank you for helping make **rcpufetch** better! Your contributions help create a more comprehensive and reliable tool for system information gathering.

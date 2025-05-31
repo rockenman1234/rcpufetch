@@ -14,12 +14,12 @@
 ## Screenshot
 ![Main Screenshot](.github/assets/Screenshot_AMD.png)
 
-## 1. Support
+## 1. Current Support
 
 | OS          | x86_64 / x86       | ARM                | RISC-V             | PowerPC            |
 |:-----------:|:------------------:|:------------------:|:------------------:|:------------------:|
-| GNU / Linux | :heavy_check_mark: | :x:                | :x:                | :x:                |
-| Windows     | :heavy_check_mark: | :x:                | -                  | -                  |
+| GNU / Linux | :heavy_check_mark: | :question          | :question:         | :question:         |
+| Windows     | :x:                | :x:                | -                  | -                  |
 | MacOS       | :x:                | :x:                | -                  | :x:                |
 | FreeBSD     | :x:                | :x:                | :x:                | :x:                |
 
