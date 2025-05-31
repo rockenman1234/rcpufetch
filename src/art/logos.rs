@@ -74,13 +74,33 @@ $C1   */////// /// ///////////// /// /// ///// ////////////       \n\
 $C1   ///     /// /// ///////// ///     ///   ///        ////.    \n\
 $C1  ///      /////   //  ///     //// ///   ///          /////   \n";
 
+const ASCII_APPLE: &str = "\
+$C1                    'c.                     \n\
+$C2                 ,xNMM.                     \n\
+$C3               .OMMMMo                      \n\
+$C4               OMMM0,                       \n\
+$C5     .;loddo:' loolloddol;.                 \n\
+$C6   cKMMMMMMMMMMNWMMMMMMMMMM0:               \n\
+$C7 .KMMMMMMMMMMMMMMMMMMMMMMMWd.               \n\
+$C1 XMMMMMMMMMMMMMMMMMMMMMMMX.                 \n\
+$C2;MMMMMMMMMMMMMMMMMMMMMMMM:                  \n\
+$C3:MMMMMMMMMMMMMMMMMMMMMMMM:                  \n\
+$C4.MMMMMMMMMMMMMMMMMMMMMMMMX.                 \n\
+$C5 kMMMMMMMMMMMMMMMMMMMMMMMMWd.               \n\
+$C6 .XMMMMMMMMMMMMMMMMMMMMMMMMMMk              \n\
+$C7  .XMMMMMMMMMMMMMMMMMMMMMMMMK.              \n\
+$C1    kMMMMMMMMMMMMMMMMMMMMMMd                \n\
+$C2     ;KMMMMMMMWXXWMMMMMMMk.                 \n\
+$C3       .cooc,.    .,coo:.                   \n";
+
 fn logo_lines_for_vendor(vendor_id: &str) -> Option<Vec<String>> {
     let (raw_logo, colors): (&str, &[&str]) = match vendor_id {
-        "AuthenticAMD" => (ASCII_AMD, &[C_FG_WHITE, C_FG_RED]),
-        "GenuineIntel" => (ASCII_INTEL_NEW, &[C_FG_CYAN]),
-        "ARM" => (ASCII_ARM, &[C_FG_CYAN]),
-        "NVIDIA" => (ASCII_NVIDIA, &[C_FG_GREEN, C_FG_WHITE]),
-        "PowerPC" => (ASCII_POWERPC, &[C_FG_YELLOW]),
+        "AuthenticAMD" | "amd" => (ASCII_AMD, &[C_FG_WHITE, C_FG_RED]),
+        "GenuineIntel" | "intel" => (ASCII_INTEL_NEW, &[C_FG_CYAN]),
+        "ARM" | "arm" => (ASCII_ARM, &[C_FG_CYAN]),
+        "NVIDIA" | "nvidia" => (ASCII_NVIDIA, &[C_FG_GREEN, C_FG_WHITE]),
+        "PowerPC" | "powerpc" => (ASCII_POWERPC, &[C_FG_YELLOW]),
+        "Apple" | "apple" => (ASCII_APPLE, &[C_FG_RED, C_FG_YELLOW, C_FG_GREEN, C_FG_CYAN, C_FG_BLUE, C_FG_MAGENTA, C_FG_WHITE]),
         _ => return None,
     };
     let mut processed_logo = raw_logo.to_string();

@@ -6,10 +6,11 @@
 > This project is still in early development, please report bugs under the issues tab. Check back in the future for the first release, thanks!
 
 ## Features
-- Shows CPU model, vendor, core and thread count, cache sizes, and maximum frequency
-- Displays a colorful ASCII art logo for your CPU vendor (AMD, Intel, ARM, NVIDIA, PowerPC)
+- Shows CPU model, vendor, core and thread count, cache sizes, maximum frequency, and CPU flags
+- Displays a colorful ASCII art logo for your CPU vendor (AMD, Intel, ARM, NVIDIA, PowerPC, Apple)
 - Override logo display with the `--logo` flag to show any vendor's logo regardless of your actual CPU
 - Disable logo display entirely with the `--no-logo` flag for clean text output
+- CPU feature flags detection on Linux (x86/ARM) and macOS (Apple Silicon)
 - Clean codebase - nothing but Rust in here!
 - Horizontally aligned output for easy reading, complete with logo support
 
@@ -22,7 +23,7 @@
 |:-----------:|:------------------:|:------------------:|:------------------:|:------------------:|
 | GNU / Linux | :heavy_check_mark: | :question:         | :question:         | :question:         |
 | Windows     | :x:                | :x:                | -                  | -                  |
-| MacOS       | :x:                | :x:                | -                  | :x:                |
+| MacOS       | :heavy_check_mark: | :heavy_check_mark: | -                  | :x:                |
 | FreeBSD     | :x:                | :x:                | :x:                | :x:                |
 
 
@@ -67,6 +68,7 @@ Display CPU information with a specific vendor's logo, regardless of your actual
 - `intel` - Intel logo (cyan theme)
 - `arm` - ARM logo (cyan theme)
 - `powerpc` - PowerPC logo (yellow theme)
+- `apple` - Apple logo (rainbow theme)
 
 The logo option is case-insensitive, so `--logo NVIDIA`, `--logo nvidia`, and `--logo Nvidia` all work.
 

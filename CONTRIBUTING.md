@@ -18,7 +18,7 @@ Thank you for your interest in contributing to **rcpufetch**! This document will
 
 ## Project Overview
 
-**rcpufetch** is a fast, cross-platform CLI tool that displays detailed CPU information in a visually appealing way, including vendor ASCII art. It is written in Rust and currently supports Linux and Windows, with plans for additional operating system support.
+**rcpufetch** is a fast, cross-platform CLI tool that displays detailed CPU information in a visually appealing way, including vendor ASCII art. It is written in Rust and currently supports Linux, Windows, and macOS, with plans for additional operating system support.
 
 The tool provides comprehensive CPU information including:
 - CPU model name and vendor
@@ -44,6 +44,9 @@ rcpufetch/
 │   ├── windows/            # Windows-specific implementation
 │   │   ├── windows.rs      # Windows CPU info via PowerShell/WMI
 │   │   └── mod.rs          # Windows module declaration
+│   ├── macos/              # macOS-specific implementation
+│   │   ├── macos.rs        # macOS CPU info via sysctl and system APIs
+│   │   └── mod.rs          # macOS module declaration
 │   └── art/                # ASCII art and visual components
 │       ├── logos.rs        # Vendor ASCII art and color definitions
 │       └── mod.rs          # Art module declaration
@@ -54,7 +57,8 @@ rcpufetch/
 - **`src/main.rs`**: Entry point that handles CLI argument parsing using `clap`, detects the operating system, and dispatches to the appropriate OS-specific module.
 - **`src/linux/linux.rs`**: Contains the complete Linux implementation including `/proc/cpuinfo` parsing, sysfs cache information reading, and formatted display output.
 - **`src/windows/windows.rs`**: Windows implementation using PowerShell and WMI queries to gather CPU information.
-- **`src/art/logos.rs`**: Contains ASCII art for different CPU vendors (AMD, Intel, ARM, NVIDIA) with color formatting support.
+- **`src/macos/macos.rs`**: macOS implementation using `sysctl` command and system APIs to gather CPU information, with special handling for Apple Silicon performance levels.
+- **`src/art/logos.rs`**: Contains ASCII art for different CPU vendors (AMD, Intel, ARM, NVIDIA, PowerPC, Apple) with color formatting support.
 
 ## Architecture Overview
 
@@ -62,7 +66,7 @@ The application follows a consistent pattern across operating systems:
 
 1. **CLI Parsing**: `main.rs` uses `clap` to parse command-line arguments (`--logo`, `--no-logo`)
 2. **OS Detection**: `main.rs` uses `std::env::consts::OS` to detect the current operating system
-3. **Module Dispatch**: Based on OS detection, the appropriate module is called (Linux, Windows, etc.)
+3. **Module Dispatch**: Based on OS detection, the appropriate module is called (Linux, Windows, macOS)
 4. **Information Gathering**: Each OS module implements a `new()` method that gathers CPU information using OS-specific APIs
 5. **Display Formatting**: Each module implements display methods that format and display the information:
    - `display_info_with_logo(logo_override)` - Shows info with vendor logo (actual or CLI-overridden)
@@ -126,6 +130,7 @@ Allows users to override the displayed vendor logo regardless of their actual CP
 - `intel` - Intel logo with cyan color scheme
 - `arm` - ARM logo with cyan color scheme
 - `powerpc` - PowerPC logo with yellow color scheme
+- `apple` - Apple logo with rainbow color scheme
 
 The logo option is **case-insensitive**, so `nvidia`, `NVIDIA`, and `Nvidia` all work.
 
@@ -309,7 +314,7 @@ The Linux implementation uses comprehensive error handling:
 Before contributing, ensure you have:
 - **Rust toolchain**: Install via [rustup.rs](https://rustup.rs/)
 - **Git**: For version control
-- **Target OS**: Access to the OS you're developing for (Linux, Windows, etc.)
+- **Target OS**: Access to the OS you're developing for (Linux, Windows, macOS, etc.)
 
 ### Development Workflow
 
@@ -476,46 +481,222 @@ The Windows implementation uses PowerShell and WMI queries to gather system info
 3. **Update `WindowsCpuInfo`**: Add fields and parsing logic
 4. **Handle differences**: Windows may provide different information than Linux
 
+### macOS Development Guidelines
+
+The macOS implementation in `src/macos/macos.rs` provides comprehensive CPU information gathering using `sysctl` APIs and handles both Intel and Apple Silicon architectures with special consideration for performance cores and efficiency cores.
+
+#### Data Sources
+
+The macOS implementation gathers information from multiple `sysctl` keys:
+
+1. **`machdep.cpu.brand_string`**: Primary source for CPU model name
+2. **`machdep.cpu.core_count`/`machdep.cpu.cores_per_package`**: Physical core count
+3. **`machdep.cpu.thread_count`/`machdep.cpu.logical_per_package`**: Logical core count (with hyperthreading)
+4. **`hw.cachesize`**: Traditional cache size information (Intel Macs)
+5. **`hw.cacheconfig`**: Cache configuration and count information
+6. **`hw.perflevel*.l*cachesize`**: Performance-level specific cache information (Apple Silicon)
+7. **`machdep.cpu.max_basic`**: Base frequency information (when available)
+8. **`hw.optional.arm.*`**: CPU feature flags and capabilities (Apple Silicon)
+
+#### MacOSCpuInfo Structure
+
+```rust
+pub struct MacOSCpuInfo {
+    model: String,           // CPU model name from sysctl
+    vendor: String,          // Vendor (Intel, AMD, Apple, or Unknown)
+    physical_cores: u32,     // Physical core count
+    logical_cores: u32,      // Logical core count (including hyperthreading)
+    base_mhz: Option<f32>,   // Base frequency in MHz (if available)
+    flags: String,           // CPU feature flags and capabilities
+    l1_size: Option<(u32, u32)>,  // L1 cache (size in KB, count)
+    l2_size: Option<(u32, u32)>,  // L2 cache (size in KB, count)
+    l3_size: Option<(u32, u32)>,  // L3 cache (size in KB, count)
+}
+```
+
+#### Vendor Detection
+
+The macOS implementation uses brand string analysis to determine the vendor:
+
+1. **Intel detection**: Searches for "intel" in the brand string
+2. **AMD detection**: Searches for "amd" in the brand string  
+3. **Apple detection**: Searches for "apple" in the brand string (Apple Silicon)
+4. **Fallback**: Uses "Unknown" for unrecognized vendors
+
+#### CPU Flags Detection
+
+The macOS implementation detects CPU feature flags and capabilities, particularly for Apple Silicon processors:
+
+**Apple Silicon Flags (ARM64):**
+The implementation queries `hw.optional.arm.*` sysctl keys to detect ARM-specific CPU features:
+
+1. **Query all ARM optional features**: Execute `sysctl hw.optional.arm.` command
+2. **Parse boolean values**: Each key returns 0 (disabled) or 1 (enabled)
+3. **Filter enabled features**: Only include features with value 1
+4. **Strip prefix**: Remove "hw.optional.arm." to get just the feature name
+5. **Format as CSV**: Return comma-separated list of enabled features
+
+**Example ARM features detected:**
+- `FEAT_AES`: AES encryption instructions
+- `FEAT_SHA256`/`FEAT_SHA512`: SHA hashing instructions  
+- `FEAT_CRC32`: CRC32 checksum instructions
+- `FEAT_LSE`: Large System Extensions
+- `FEAT_FP16`: Half-precision floating point
+- `FEAT_DotProd`: Dot product instructions
+- `AdvSIMD`: Advanced SIMD instructions
+
+**Implementation details:**
+```rust
+fn get_cpu_flags() -> String {
+    // Execute: sysctl hw.optional.arm.
+    // Parse each line: hw.optional.arm.FEATURE_NAME: 1
+    // Extract features with value 1
+    // Return: "FEAT_AES,FEAT_SHA256,AdvSIMD,..."
+}
+```
+
+The flags are displayed in the same format as Linux CPU flags for consistency across platforms.
+
+#### Apple Silicon Specific Handling
+
+Apple Silicon chips (M1, M2, M3, etc.) have a unique architecture with performance cores (P-cores) and efficiency cores (E-cores), each with different cache configurations:
+
+**Performance Level Cache Information:**
+- **`hw.perflevel0.*`**: Performance core (P-core) cache information
+- **`hw.perflevel1.*`**: Efficiency core (E-core) cache information
+
+**Special Cache Display Logic:**
+```rust
+// For Apple Silicon, display detailed performance-level cache info
+if self.vendor == "Apple" {
+    // Show P-Core L1 Cache: [size] I + [size] D
+    // Show E-Core L1 Cache: [size] I + [size] D  
+    // Show P-Core L2 Cache: [size]
+    // Show E-Core L2 Cache: [size]
+}
+```
+
+#### Core Count Calculation
+
+The macOS implementation handles core counting with fallbacks:
+
+1. **Primary method**: Use `machdep.cpu.core_count` and `machdep.cpu.thread_count`
+2. **Fallback method**: Use `machdep.cpu.cores_per_package` and `machdep.cpu.logical_per_package`
+3. **Logical core fallback**: If logical count unavailable, use physical count
+
+#### Cache Information Parsing
+
+The implementation uses a two-tier approach optimized for different Mac architectures:
+
+**Traditional Intel Mac Approach:**
+1. **Parse `hw.cachesize`**: Space-separated cache sizes in bytes
+2. **Parse `hw.cacheconfig`**: Corresponding cache counts/configuration
+3. **Convert to KB**: All cache sizes standardized to kilobytes
+4. **Handle L3 fallback**: Use performance level caches if traditional L3 unavailable
+
+**Apple Silicon Approach:**
+1. **Query performance levels**: Check `hw.perflevel0` and `hw.perflevel1` sysctl keys
+2. **Separate I/D caches**: Handle instruction and data caches separately for L1
+3. **Performance differentiation**: Display P-core and E-core caches separately
+4. **Fallback integration**: Use larger performance level L2 as equivalent "shared" cache
+
+#### Sysctl Helper Functions
+
+The implementation provides utility functions for sysctl interaction:
+
+```rust
+fn get_sysctl_string(key: &str) -> Result<String, String>
+fn get_sysctl_u32(key: &str) -> Result<u32, String>
+```
+
+These functions:
+- Execute `sysctl -n [key]` commands
+- Handle command execution errors
+- Parse string/numeric values with proper error handling
+- Return descriptive error messages for debugging
+
+#### Error Handling Best Practices
+
+```rust
+// Good: Graceful fallbacks with descriptive errors
+let physical_cores = Self::get_sysctl_u32("machdep.cpu.core_count")
+    .unwrap_or_else(|_| Self::get_sysctl_u32("machdep.cpu.cores_per_package").unwrap_or(0));
+
+// Good: Optional frequency information
+let base_mhz = Self::get_sysctl_string("machdep.cpu.max_basic")
+    .ok()
+    .and_then(|s| s.parse::<f32>().ok());
+
+// Good: Error context in sysctl calls
+fn get_sysctl_string(key: &str) -> Result<String, String> {
+    // Provides context about which sysctl key failed
+}
+```
+
+#### Adding macOS Features
+
+To add new CPU information for macOS:
+
+1. **Research sysctl keys**: Use `sysctl -a | grep cpu` or `sysctl -a | grep hw` to find relevant keys
+2. **Test across architectures**: Verify keys work on both Intel and Apple Silicon Macs
+3. **Handle architecture differences**: Apple Silicon may have different or additional keys
+4. **Add parsing logic**: Use the existing helper functions for consistency
+5. **Update display methods**: Add the new information to `get_info_lines()`
+
+#### macOS-Specific Considerations
+
+- **sysctl dependency**: All information gathering relies on the `sysctl` command being available
+- **Architecture variations**: Intel Macs vs Apple Silicon may provide different information
+- **Performance levels**: Apple Silicon's dual-core-type architecture requires special handling
+- **Limited frequency info**: macOS doesn't always expose detailed frequency information
+- **Privilege requirements**: Some sysctl keys may require elevated privileges
+- **CPU flags support**: ARM feature flags are available on Apple Silicon via `hw.optional.arm.*` keys
+
 ### Adding Support for New Operating Systems
 
-To add support for a new OS (e.g., macOS, FreeBSD, Solaris):
+To add support for a new OS (e.g., Solaris, FreeBSD, OpenBSD):
 
 1. **Create OS directory structure**:
    ```
    src/
-   ├── macos/           # New OS directory
-   │   ├── macos.rs     # Implementation file
+   ├── solaris/         # New OS directory
+   │   ├── solaris.rs   # Implementation file
    │   └── mod.rs       # Module declaration
    ```
 
 2. **Implement the standard interface**:
    ```rust
-   pub struct MacOSCpuInfo {
+   pub struct SolarisCpuInfo {
        model: String,
        vendor: String,
        // OS-specific fields
    }
    
-   impl MacOSCpuInfo {
+   impl SolarisCpuInfo {
        pub fn new() -> Result<Self, String> {
            // OS-specific information gathering
        }
        
-       pub fn display_info(&self) {
+       pub fn display_info_with_logo(&self, logo_override: Option<&str>) {
            // Display logic using get_logo_lines_for_vendor
+       }
+       
+       pub fn display_info_no_logo(&self) {
+           // Text-only display
        }
    }
    ```
 
 3. **Update `main.rs`**:
    ```rust
-   mod macos;  // Add module declaration
+   mod solaris;  // Add module declaration
    
    match os {
        "linux" => { /* existing code */ },
        "windows" => { /* existing code */ },
-       "macos" => {
-           use crate::macos::macos::MacOSCpuInfo;
+       "macos" => { /* existing code */ },
+       "solaris" => {
+           use crate::solaris::solaris::SolarisCpuInfo;
            // Implementation
        },
        _ => { /* unsupported OS */ }
@@ -523,10 +704,46 @@ To add support for a new OS (e.g., macOS, FreeBSD, Solaris):
    ```
 
 4. **Research OS-specific APIs**:
-   - **macOS**: `sysctl`, system_profiler, IOKit
-   - **FreeBSD**: `sysctl`, `/proc` (if mounted)
-   - **OpenBSD/NetBSD**: `sysctl`, machine-specific files
-   - **Solaris**: `psrinfo`, `kstat`
+   - **Solaris**: `psrinfo`, `kstat`, `prtconf`, `/proc/cpuinfo` (if available)
+   - **FreeBSD**: `sysctl`, `/proc` (if mounted), `dmesg`
+   - **OpenBSD/NetBSD**: `sysctl`, machine-specific files, `dmesg`
+   - **AIX**: `lsattr`, `lscfg`, `prtconf`
+
+#### Solaris Implementation Guidelines
+
+For Solaris specifically, key data sources include:
+
+**Command-based Information:**
+- **`psrinfo -v`**: Detailed processor information including model, frequency
+- **`kstat cpu_info`**: Kernel statistics for CPU information
+- **`prtconf -v`**: System configuration including CPU details
+- **`isainfo -v`**: Instruction set architecture information
+
+**File-based Information:**
+- **`/proc/cpuinfo`**: May be available on some Solaris systems
+- **`/dev/cpu/`**: CPU device information (if accessible)
+
+**Sample Solaris Implementation Structure:**
+```rust
+impl SolarisCpuInfo {
+    fn get_psrinfo_data() -> Result<String, String> {
+        // Execute 'psrinfo -v' command
+        // Parse processor information
+    }
+    
+    fn get_kstat_data() -> Result<String, String> {
+        // Execute 'kstat cpu_info' command
+        // Parse kernel statistics
+    }
+    
+    fn parse_cpu_model(psrinfo_output: &str) -> String {
+        // Extract CPU model from psrinfo output
+    }
+    
+    fn parse_cpu_vendor(psrinfo_output: &str) -> String {
+        // Determine vendor from processor information
+    }
+}
 
 ## ASCII Art and Logo System
 
@@ -539,6 +756,7 @@ The logo system in `src/art/logos.rs` provides vendor-specific ASCII art with co
 - **ARM**: Cyan color scheme (`ARM`)
 - **NVIDIA**: Green and white color scheme (`NVIDIA`)
 - **PowerPC**: Yellow color scheme (`PowerPC`)
+- **Apple**: Rainbow color scheme (`Apple`)
 
 ### CLI Integration
 
@@ -550,6 +768,7 @@ The logo system integrates with the command-line interface in the following ways
    - `intel` → `GenuineIntel`
    - `arm` → `ARM`
    - `powerpc` → `PowerPC`
+   - `apple` → `Apple`
 
 2. **Logo Display**: The `get_logo_lines_for_vendor()` function is called with either:
    - The actual CPU vendor ID (default behavior)
@@ -675,6 +894,26 @@ Since the project deals with system information, manual testing is crucial:
 3. **Performance testing**: Ensure the tool remains fast even on slower systems
 4. **Output validation**: Verify that displayed information is accurate
 
+### macOS-Specific Testing
+
+For macOS CPU flags functionality:
+
+1. **Apple Silicon testing**: Verify flags detection works on M1/M2/M3 chips:
+   ```bash
+   # Test basic functionality
+   cargo run
+   
+   # Test no-logo mode for clean flags output
+   cargo run -- --no-logo
+   
+   # Verify flags match system capabilities
+   sysctl hw.optional.arm. | grep ": 1"
+   ```
+
+2. **Intel Mac testing**: Ensure graceful handling on Intel Macs where ARM flags may not be available
+
+3. **Error resilience**: Test behavior when sysctl commands fail or return unexpected output
+
 ### Automated Testing Considerations
 
 While comprehensive unit testing is challenging for system information tools, consider:
@@ -702,12 +941,12 @@ When reporting bugs or requesting features, please include:
 
 ### For Bug Reports
 
-- **OS and version**: e.g., "Ubuntu 22.04", "Windows 11"
+- **OS and version**: e.g., "Ubuntu 22.04", "Windows 11", "macOS 14.0"
 - **CPU information**: Model, vendor, core count
 - **Error message**: Full error output if applicable
 - **Expected behavior**: What should have happened
 - **Steps to reproduce**: How to trigger the issue
-- **Output of relevant system files**: `/proc/cpuinfo` content for Linux issues
+- **Output of relevant system files**: `/proc/cpuinfo` content for Linux issues, `sysctl` output for macOS issues
 
 ### For Feature Requests
 
@@ -722,8 +961,8 @@ Use these formats for consistency:
 
 ```markdown
 **Bug Report**
-- OS: Ubuntu 22.04
-- CPU: AMD Ryzen 5 9600X
+- OS: Ubuntu 22.04 / Windows 11 / macOS 14.0
+- CPU: AMD Ryzen 5 9600X / Intel i7-13700K / Apple M3 Pro
 - rcpufetch version: 0.1.0
 - Error: [paste error message]
 - Expected: [describe expected behavior]
@@ -731,8 +970,8 @@ Use these formats for consistency:
 **Feature Request**
 - Feature: CPU temperature display
 - Rationale: Users want to monitor thermal performance
-- OS support: Linux (primary), Windows (future)
-- Data source: /sys/class/thermal/ on Linux
+- OS support: Linux (primary), macOS, Windows (future)
+- Data source: /sys/class/thermal/ on Linux, sysctl on macOS
 ```
 
 ## Pull Request Process
@@ -800,8 +1039,9 @@ Types:
 Examples:
 ```
 feat(linux): add CPU temperature monitoring
+feat(macos): add Apple Silicon performance level support
 fix(windows): handle missing cache information gracefully
-docs(contributing): update Linux implementation details
+docs(contributing): update macOS implementation details
 ```
 
 ---

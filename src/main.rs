@@ -1,6 +1,7 @@
 mod linux; // Declares the linux module (src/linux/mod.rs)
-mod art; // Add this to declare the art module
-mod windows;
+mod art; // Declares the art module (src/art.rs)
+mod windows; // Declares the windows module (src/windows/mod.rs)
+mod macos; // Declares the macos module (src/macos/mod.rs)
 
 // Use the LinuxCpuInfo struct from the nested linux module
 use crate::linux::linux::LinuxCpuInfo;
@@ -14,7 +15,7 @@ struct Args {
     #[arg(short = 'n', long = "no-logo")]
     no_logo: bool,
     
-    /// Override logo display with specific vendor (nvidia, powerpc, arm, amd, intel)
+    /// Override logo display with specific vendor (nvidia, powerpc, arm, amd, intel, apple)
     #[arg(short = 'l', long = "logo", value_name = "VENDOR")]
     logo: Option<String>,
 }
@@ -30,8 +31,9 @@ fn main() {
             "arm" => Some("ARM"),
             "amd" => Some("AuthenticAMD"),
             "intel" => Some("GenuineIntel"),
+            "apple" => Some("Apple"),
             _ => {
-                eprintln!("Warning: Unknown logo vendor '{}'. Valid options: nvidia, powerpc, arm, amd, intel", logo);
+                eprintln!("Warning: Unknown logo vendor '{}'. Valid options: nvidia, powerpc, arm, amd, intel, apple", logo);
                 None
             }
         }
@@ -58,6 +60,21 @@ fn main() {
         "windows" => {
             use crate::windows::windows::WindowsCpuInfo;
             match WindowsCpuInfo::new() {
+                Ok(cpu_info) => {
+                    if args.no_logo {
+                        cpu_info.display_info_no_logo();
+                    } else {
+                        cpu_info.display_info_with_logo(logo_override);
+                    }
+                }
+                Err(e) => {
+                    eprintln!("Error fetching CPU info: {}", e);
+                }
+            }
+        }
+        "macos" => {
+            use crate::macos::macos::MacOSCpuInfo;
+            match MacOSCpuInfo::new() {
                 Ok(cpu_info) => {
                     if args.no_logo {
                         cpu_info.display_info_no_logo();
