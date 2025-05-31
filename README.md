@@ -11,25 +11,8 @@
 - Clean codebase - nothing but Rust in here!
 - Horizontally aligned output for easy reading, complete with logo support.
 
-## Example Output
-```
-╰─>$ ./rcpufetch
-          '###############                Name: AMD Ryzen 5 Processor
-             ,#############               Vendor: AuthenticAMD                  
-                      .####               Max Frequency: 5.486 GHz
-              #.      .####               Cores:  6 cores (12 threads)
-            :##.      .####               L1i Size: 32KB (32KB Total)
-           :###.      .####               L1d Size: 48KB (48KB Total)
-           #########.   :##               L2 Size: 1024KB (1024KB Total)
-           #######.       ;               L3 Size: 32768KB (32768KB Total)
-                                          
-    ###     ###      ###   #######        
-   ## ##    #####  #####   ##     ##      
-  ##   ##   ### #### ###   ##      ##     
- #########  ###  ##  ###   ##      ##     
-##       ## ###      ###   ##     ##      
-##       ## ###      ###   #######        
-```
+## Screenshot
+![Main Screenshot](.github/assets/Screenshot_AMD.png)
 
 ## 1. Support
 
