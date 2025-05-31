@@ -70,7 +70,7 @@ $C2##   ##    ###    ##  ######   ## ##     ##  \n";
 
 fn logo_lines_for_vendor(vendor_id: &str) -> Option<Vec<String>> {
     let (raw_logo, colors): (&str, &[&str]) = match vendor_id {
-        "AuthenticAMD" => (ASCII_AMD, &[C_FG_WHITE, C_FG_GREEN]),
+        "AuthenticAMD" => (ASCII_AMD, &[C_FG_WHITE, C_FG_RED]),
         "GenuineIntel" => (ASCII_INTEL_NEW, &[C_FG_CYAN]),
         "ARM" => (ASCII_ARM, &[C_FG_CYAN]),
         "NVIDIA" => (ASCII_NVIDIA, &[C_FG_GREEN, C_FG_WHITE]),
