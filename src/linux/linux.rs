@@ -1,4 +1,5 @@
 use std::fs;
+use std::collections::HashMap;
 use std::process::Command;
 use crate::art::logos::get_logo_lines_for_vendor;
 
@@ -77,8 +78,8 @@ impl LinuxCpuInfo {
         // Get maximum frequency
         let max_mhz = Self::get_max_frequency().or(parsed_info.max_mhz);
 
-        // Get cache information using getconf (fallback to /proc/cpuinfo values)
-        let (l1d_size, l1i_size, l2_size, l3_size) = Self::get_cache_info(parsed_info.physical_cores)
+        // Get cache information from sysfs (fallback to /proc/cpuinfo values)
+        let (l1d_size, l1i_size, l2_size, l3_size) = Self::get_cache_info()
         .unwrap_or((parsed_info.l1d_size, parsed_info.l1i_size, parsed_info.l2_size, parsed_info.l3_size));
 
         Ok(LinuxCpuInfo {
@@ -282,57 +283,99 @@ impl LinuxCpuInfo {
         None
     }
 
-    /// Get detailed cache information using getconf.
+    /// Get detailed cache information from sysfs.
     ///
-    /// This function uses the `getconf` command to retrieve accurate cache information
-    /// for all cache levels (L1 data, L1 instruction, L2, and L3). This method is more
-    /// reliable than parsing sysfs or /proc/cpuinfo as it provides standardized cache
-    /// information directly from the system configuration.
-    ///
-    /// # Arguments
-    ///
-    /// * `physical_cores` - Number of physical CPU cores for calculating total cache sizes
+    /// This function reads cache information directly from the Linux sysfs filesystem
+    /// at `/sys/devices/system/cpu/cpu*/cache/index*/` to get accurate cache sizes
+    /// for all cache levels. It reads cache information from cpu0 only to avoid
+    /// double-counting, then calculates totals based on sharing characteristics:
+    /// - L1 and L2 caches are typically per-core, so multiply by physical core count
+    /// - L3 cache is typically shared across all cores
     ///
     /// # Returns
     ///
     /// Returns a tuple of optional cache sizes in the format:
     /// `(L1d, L1i, L2, L3)` where each element is `Option<(per_core_kb, total_kb)>`
-    fn get_cache_info(physical_cores: u32) -> Option<(Option<(u32, u32)>, Option<(u32, u32)>, Option<(u32, u32)>, Option<(u32, u32)>)> {
-        let mut l1d_size = None;
-        let mut l1i_size = None;
-        let mut l2_size = None;
-        let mut l3_size = None;
-
-        // Try to get cache information using getconf
-        let cache_vars = [
-            ("LEVEL1_DCACHE_SIZE", &mut l1d_size),
-            ("LEVEL1_ICACHE_SIZE", &mut l1i_size),
-            ("LEVEL2_CACHE_SIZE", &mut l2_size),
-            ("LEVEL3_CACHE_SIZE", &mut l3_size),
-        ];
-
-        for (var_name, cache_ref) in cache_vars {
-            if let Ok(output) = Command::new("getconf").arg(var_name).output() {
-                if output.status.success() {
-                    let size_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
-                    if let Ok(size_bytes) = size_str.parse::<u32>() {
-                        if size_bytes > 0 {
-                            let size_kb = size_bytes / 1024;
-                            // For L1 and L2 caches, multiply by physical cores (per-core caches)
-                            // For L3 cache, it's typically shared across all cores
-                            let total_kb = if var_name.contains("LEVEL3") {
-                                size_kb // L3 is usually shared
-                            } else {
-                                size_kb * physical_cores // L1 and L2 are usually per-core
-                            };
-                            *cache_ref = Some((size_kb, total_kb));
+    /// Only total cache sizes are reported for each level.
+    fn get_cache_info() -> Option<(Option<(u32, u32)>, Option<(u32, u32)>, Option<(u32, u32)>, Option<(u32, u32)>)> {
+        use std::collections::HashMap;
+        
+        let mut cache_sizes: HashMap<String, u32> = HashMap::new();
+        
+        // Read cache information from cpu0 only to avoid double-counting
+        let cpu0_cache_dir = std::path::Path::new("/sys/devices/system/cpu/cpu0/cache");
+        if let Ok(cache_entries) = fs::read_dir(cpu0_cache_dir) {
+            for cache_entry in cache_entries.flatten() {
+                let cache_path = cache_entry.path();
+                if let Some(index_name) = cache_path.file_name().and_then(|n| n.to_str()) {
+                    if index_name.starts_with("index") {
+                        // Read cache level, type, and size
+                        let level_path = cache_path.join("level");
+                        let type_path = cache_path.join("type");
+                        let size_path = cache_path.join("size");
+                        
+                        if let (Ok(level_str), Ok(type_str), Ok(size_str)) = (
+                            fs::read_to_string(&level_path),
+                            fs::read_to_string(&type_path),
+                            fs::read_to_string(&size_path)
+                        ) {
+                            let level = level_str.trim();
+                            let cache_type = type_str.trim();
+                            let size_str = size_str.trim();
+                            
+                            // Parse size (e.g., "32K" -> 32, "1024K" -> 1024)
+                            if let Some(size_kb) = Self::parse_cache_size(size_str) {
+                                let cache_key = format!("L{}_{}", level, cache_type);
+                                cache_sizes.insert(cache_key, size_kb);
+                            }
                         }
                     }
                 }
             }
         }
+        
+        // Get physical core count for calculating totals
+        let physical_cores = Self::get_physical_core_count().unwrap_or(1);
+        
+        // Calculate totals based on cache sharing characteristics
+        let l1d_total = cache_sizes.get("L1_Data")
+            .map(|&size| size * physical_cores); // L1 data is per-core
+        let l1i_total = cache_sizes.get("L1_Instruction") 
+            .map(|&size| size * physical_cores); // L1 instruction is per-core
+        let l2_total = cache_sizes.get("L2_Unified")
+            .map(|&size| size * physical_cores); // L2 is typically per-core
+        let l3_total = cache_sizes.get("L3_Unified")
+            .copied(); // L3 is typically shared across all cores
+        
+        Some((
+            l1d_total.map(|total| (0, total)), // Only report total, per-core not used
+            l1i_total.map(|total| (0, total)),
+            l2_total.map(|total| (0, total)),
+            l3_total.map(|total| (0, total)),
+        ))
+    }
 
-        Some((l1d_size, l1i_size, l2_size, l3_size))
+    /// Parse cache size string from sysfs.
+    ///
+    /// This helper function parses cache size strings from sysfs files,
+    /// which can be in formats like "32K", "1024K", "32768K", etc.
+    ///
+    /// # Arguments
+    ///
+    /// * `size_str` - Cache size string from sysfs (e.g., "32K")
+    ///
+    /// # Returns
+    ///
+    /// Returns the cache size in kilobytes, or `None` if parsing fails.
+    fn parse_cache_size(size_str: &str) -> Option<u32> {
+        if size_str.ends_with('K') {
+            size_str[..size_str.len() - 1].parse::<u32>().ok()
+        } else if size_str.ends_with("KB") {
+            size_str[..size_str.len() - 2].parse::<u32>().ok()
+        } else {
+            // Try parsing as plain number (assume KB)
+            size_str.parse::<u32>().ok()
+        }
     }
 
     /// Print the CPU information in a horizontally aligned format with the vendor logo.
@@ -354,8 +397,14 @@ impl LinuxCpuInfo {
                                 format!("Cores: {:>2} cores ({} threads)", self.physical_cores, self.logical_cores),
                                     format!("L1i Size: {}", match self.l1i_size { Some((_, total)) => Self::format_cache_size(total), None => "Unknown".to_string() }),
                                         format!("L1d Size: {}", match self.l1d_size { Some((_, total)) => Self::format_cache_size(total), None => "Unknown".to_string() }),
-                                            format!("L2 Size: {}", match self.l2_size { Some((_, total)) => Self::format_cache_size(total), None => "Unknown".to_string() }),
-                                                format!("L3 Size: {}", match self.l3_size { Some((_, total)) => Self::format_cache_size(total), None => "Unknown".to_string() }),
+                                            format!("L1 Size: {}", match (self.l1i_size, self.l1d_size) {
+                                                (Some((_, l1i_total)), Some((_, l1d_total))) => Self::format_cache_size(l1i_total + l1d_total),
+                                                (Some((_, l1i_total)), None) => Self::format_cache_size(l1i_total),
+                                                (None, Some((_, l1d_total))) => Self::format_cache_size(l1d_total),
+                                                (None, None) => "Unknown".to_string()
+                                            }),
+                                                format!("L2 Size: {}", match self.l2_size { Some((_, total)) => Self::format_cache_size(total), None => "Unknown".to_string() }),
+                                                    format!("L3 Size: {}", match self.l3_size { Some((_, total)) => Self::format_cache_size(total), None => "Unknown".to_string() }),
         ];
 
         let logo_width = logo_lines.iter().map(|l| l.chars().count()).max().unwrap_or(0);
@@ -425,6 +474,62 @@ impl LinuxCpuInfo {
             format!("{:.1}MB", size_mb)
         } else {
             format!("{}KB", size_kb)
+        }
+    }
+
+    /// Get the number of physical CPU cores from /proc/cpuinfo.
+    ///
+    /// This helper function determines the number of physical cores by parsing
+    /// /proc/cpuinfo and counting unique (physical_id, core_id) pairs.
+    ///
+    /// # Returns
+    ///
+    /// Returns the number of physical cores, or `None` if the count cannot be determined.
+    fn get_physical_core_count() -> Option<u32> {
+        let cpuinfo_content = fs::read_to_string("/proc/cpuinfo").ok()?;
+        let mut physical_ids = std::collections::HashSet::new();
+        let mut core_ids = std::collections::HashSet::new();
+        
+        for processor_block in cpuinfo_content.split("\n\n") {
+            if processor_block.trim().is_empty() {
+                continue;
+            }
+            
+            let mut current_physical_id = None;
+            let mut current_core_id = None;
+            
+            for line in processor_block.lines() {
+                if let Some((key, value)) = line.split_once(':') {
+                    match key.trim() {
+                        "physical id" => {
+                            if let Ok(id) = value.trim().parse::<u32>() {
+                                current_physical_id = Some(id);
+                            }
+                        },
+                        "core id" => {
+                            if let Ok(id) = value.trim().parse::<u32>() {
+                                current_core_id = Some(id);
+                            }
+                        },
+                        _ => {}
+                    }
+                }
+            }
+            
+            if let Some(phys_id) = current_physical_id {
+                physical_ids.insert(phys_id);
+            }
+            if let (Some(phys_id), Some(core_id)) = (current_physical_id, current_core_id) {
+                core_ids.insert((phys_id, core_id));
+            }
+        }
+        
+        if !core_ids.is_empty() {
+            Some(core_ids.len() as u32)
+        } else if !physical_ids.is_empty() {
+            Some(physical_ids.len() as u32)
+        } else {
+            Some(1) // Default fallback
         }
     }
 }
