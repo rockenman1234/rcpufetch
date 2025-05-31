@@ -23,12 +23,12 @@
 |:-----------:|:------------------:|:------------------:|:------------------:|:------------------:|
 | GNU / Linux | :heavy_check_mark: | :question:         | :question:         | :question:         |
 | Windows     | :x:                | :x:                | -                  | -                  |
-| MacOS       | :heavy_check_mark: | :heavy_check_mark: | -                  | :x:                |
+| MacOS       | :question:         | :heavy_check_mark: | -                  | :x:                |
 | FreeBSD     | :x:                | :x:                | :x:                | :x:                |
 
 
 > [!WARNING]
-> Linux should be cross platform now, I haven't tested it or added more logos beyond x86 - TBD.
+> Linux & MacOS should be universal now, I haven't tested it or added more logos beyond x86_64 for Linux and arm64 for MacOS - TBD.
 
 ## Installation
 1. Clone the repository:
