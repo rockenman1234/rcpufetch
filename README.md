@@ -16,15 +16,16 @@
 
 ## Screenshot
 ![Main Screenshot](.github/assets/Screenshot_AMD.png)
+![Secondary Screenshot](.github/assets/Screenshot_APPLE.png)
 
 ## 1. Current Support
 
 | OS          | x86_64 / x86       | ARM                | RISC-V             | PowerPC            |
 |:-----------:|:------------------:|:------------------:|:------------------:|:------------------:|
-| GNU / Linux | :heavy_check_mark: | :question:         | :question:         | :question:         |
-| Windows     | :x:                | :x:                | -                  | -                  |
-| MacOS       | :question:         | :heavy_check_mark: | -                  | :question:         |
-| FreeBSD     | :x:                | :x:                | :x:                | :x:                |
+| GNU / Linux | ✅                 | ❓                 | ❓                 | ❓                |
+| Windows     | ❌                 | ❌                 | -                  | -                  |
+| MacOS       | :question:         | ✅                 | -                  | ❓                 |
+| FreeBSD     | ❌                 | ❌                 | ❌                 | ❌                |
 
 
 > [!WARNING]
