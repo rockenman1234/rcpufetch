@@ -1,4 +1,3 @@
-use std::process::Command;
 use crate::art::logos::get_logo_lines_for_vendor;
 
 pub struct WindowsCpuInfo {
@@ -27,29 +26,69 @@ impl WindowsCpuInfo {
         });
     }
 
-    pub fn display_info(&self) {
-        println!("CPU Model: {}", self.model);
-        println!("Vendor: {}", self.vendor);
-        println!("Physical Cores: {}", self.physical_cores);
-        println!("Logical Cores: {}", self.logical_cores);
-        if let Some(mhz) = self.base_mhz {
-            println!("Base Frequency: {:.2} MHz", mhz);
-        }
-        if let Some((l1, l1_count)) = self.l1_size {
-            println!("L1 Cache Size: {} KB ({} cores)", l1, l1_count);
-        }
-        if let Some((l2, l2_count)) = self.l2_size {
-            println!("L2 Cache Size: {} KB ({} cores)", l2, l2_count);
-        }
-        if let Some((l3, l3_count)) = self.l3_size {
-            println!("L3 Cache Size: {} KB ({} cores)", l3, l3_count);
-        }
+    /// Display CPU information with logo (side-by-side layout).
+    ///
+    /// This function displays comprehensive CPU information alongside a vendor logo
+    /// in a side-by-side layout. The logo can be overridden to display a different
+    /// vendor's logo regardless of the actual CPU vendor.
+    pub fn display_info_with_logo(&self, logo_override: Option<&str>) {
+        let vendor_to_use = logo_override.unwrap_or(&self.vendor);
+        let logo_lines = get_logo_lines_for_vendor(vendor_to_use).unwrap_or_else(|| vec![]);
+        
+        let info_lines = self.get_info_lines();
+        
+        let logo_width = logo_lines.iter().map(|l| l.chars().count()).max().unwrap_or(0);
+        let sep = "   ";
+        let max_lines = std::cmp::max(logo_lines.len(), info_lines.len());
 
-        // Display logo
-        if let Some(logo_lines) = get_logo_lines_for_vendor(&self.vendor) {
-            for line in logo_lines {
-                println!("{}", line);
-            }
+        // Print logo and info side by side
+        for i in 0..max_lines {
+            let logo = logo_lines.get(i).map(|s| s.as_str()).unwrap_or("");
+            let info = info_lines.get(i).map(|s| s.as_str()).unwrap_or("");
+            println!("{:<width$}{}{}", logo, sep, info, width=logo_width);
         }
+    }
+
+    /// Display CPU information without any logo.
+    ///
+    /// This function displays comprehensive CPU information in a simple list format
+    /// without any vendor logo or side-by-side alignment.
+    pub fn display_info_no_logo(&self) {
+        let info_lines = self.get_info_lines();
+        
+        // Print CPU information without logo
+        for line in info_lines {
+            println!("{}", line);
+        }
+    }
+
+    /// Get the formatted information lines for display.
+    ///
+    /// This helper function generates the formatted CPU information lines
+    /// that are used by both logo and no-logo display methods.
+    fn get_info_lines(&self) -> Vec<String> {
+        let mut lines = vec![
+            format!("Name: {}", self.model),
+            format!("Vendor: {}", self.vendor),
+            format!("Cores: {} cores ({} threads)", self.physical_cores, self.logical_cores),
+        ];
+        
+        if let Some(mhz) = self.base_mhz {
+            lines.push(format!("Base Frequency: {:.2} MHz", mhz));
+        }
+        
+        if let Some((l1, l1_count)) = self.l1_size {
+            lines.push(format!("L1 Cache Size: {} KB ({} cores)", l1, l1_count));
+        }
+        
+        if let Some((l2, l2_count)) = self.l2_size {
+            lines.push(format!("L2 Cache Size: {} KB ({} cores)", l2, l2_count));
+        }
+        
+        if let Some((l3, l3_count)) = self.l3_size {
+            lines.push(format!("L3 Cache Size: {} KB ({} cores)", l3, l3_count));
+        }
+        
+        lines
     }
 } 

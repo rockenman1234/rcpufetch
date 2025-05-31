@@ -1,5 +1,4 @@
 use std::fs;
-use std::collections::HashMap;
 use std::process::Command;
 use crate::art::logos::get_logo_lines_for_vendor;
 
@@ -378,16 +377,18 @@ impl LinuxCpuInfo {
         }
     }
 
-    /// Print the CPU information in a horizontally aligned format with the vendor logo.
+    /// Print the CPU information with an optional logo override.
     ///
     /// This function displays comprehensive CPU information in a formatted layout
-    /// alongside the appropriate vendor logo. The output includes CPU model, architecture,
-    /// vendor information, frequency data, core counts, cache sizes, and CPU flags.
+    /// alongside the specified vendor logo or the detected vendor logo if none is specified.
     ///
-    /// The CPU flags are automatically wrapped to fit within the display width,
-    /// and all information is aligned for easy reading.
-    pub fn display_info(&self) {
-        let logo_lines = get_logo_lines_for_vendor(&self.vendor).unwrap_or_else(|| vec![]);
+    /// # Arguments
+    ///
+    /// * `logo_override` - Optional vendor ID to override the detected vendor logo
+    pub fn display_info_with_logo(&self, logo_override: Option<&str>) {
+        let vendor_to_use = logo_override.unwrap_or(&self.vendor);
+        let logo_lines = get_logo_lines_for_vendor(vendor_to_use).unwrap_or_else(|| vec![]);
+        
         let info_lines = vec![
             format!("Name: {:<30}", self.model),
                 format!("Architecture: {:<30}", self.architecture),
@@ -454,6 +455,83 @@ impl LinuxCpuInfo {
             };
             println!("{:<width$}{}{}", logo, sep, info.as_str(), width=logo_width);
         }
+    }
+
+    /// Print the CPU information without any logo.
+    ///
+    /// This function displays comprehensive CPU information in a simple list format
+    /// without any vendor logo or side-by-side alignment.
+    pub fn display_info_no_logo(&self) {
+        let info_lines = self.get_info_lines();
+        
+        // Print CPU information without logo
+        for line in info_lines {
+            println!("{}", line);
+        }
+        
+        // Print flags with wrapping
+        print!("Flags: ");
+        let wrap_width = 80; // Standard terminal width
+        let mut current_line_len = 7; // "Flags: " length
+        let mut first_flag = true;
+        
+        for word in self.flags.split_whitespace() {
+            if !first_flag && current_line_len + word.len() + 1 > wrap_width {
+                println!();
+                print!("       {}", word); // 7 spaces to align with "Flags: "
+                current_line_len = 7 + word.len();
+            } else {
+                if first_flag {
+                    print!("{}", word);
+                    current_line_len += word.len();
+                    first_flag = false;
+                } else {
+                    print!(" {}", word);
+                    current_line_len += word.len() + 1;
+                }
+            }
+        }
+        println!(); // Final newline
+    }
+
+    /// Get the formatted information lines for display.
+    ///
+    /// This helper function generates the formatted CPU information lines
+    /// that are used by both logo and no-logo display methods.
+    fn get_info_lines(&self) -> Vec<String> {
+        vec![
+            format!("Name: {}", self.model),
+            format!("Architecture: {}", self.architecture),
+            format!("Byte Order: {}", self.byte_order),
+            format!("Vendor: {}", self.vendor),
+            format!("Max Frequency: {}", match self.max_mhz { 
+                Some(ghz) => format!("{:.3} GHz", ghz), 
+                None => "Unknown".to_string() 
+            }),
+            format!("Cores: {} cores ({} threads)", self.physical_cores, self.logical_cores),
+            format!("L1i Size: {}", match self.l1i_size { 
+                Some((_, total)) => Self::format_cache_size(total), 
+                None => "Unknown".to_string() 
+            }),
+            format!("L1d Size: {}", match self.l1d_size { 
+                Some((_, total)) => Self::format_cache_size(total), 
+                None => "Unknown".to_string() 
+            }),
+            format!("L1 Size: {}", match (self.l1i_size, self.l1d_size) {
+                (Some((_, l1i_total)), Some((_, l1d_total))) => Self::format_cache_size(l1i_total + l1d_total),
+                (Some((_, l1i_total)), None) => Self::format_cache_size(l1i_total),
+                (None, Some((_, l1d_total))) => Self::format_cache_size(l1d_total),
+                (None, None) => "Unknown".to_string()
+            }),
+            format!("L2 Size: {}", match self.l2_size { 
+                Some((_, total)) => Self::format_cache_size(total), 
+                None => "Unknown".to_string() 
+            }),
+            format!("L3 Size: {}", match self.l3_size { 
+                Some((_, total)) => Self::format_cache_size(total), 
+                None => "Unknown".to_string() 
+            }),
+        ]
     }
 
     /// Format cache size with appropriate units (KB or MB).

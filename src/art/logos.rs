@@ -54,19 +54,25 @@ $C1           .:::.     .oooooooooooooooooool   \n\
 $C1      .:cll;   ,c:::.     cooooooooooooool   \n\
 $C1   ,clo'      ;.   oolc:     ooooooooooool   \n\
 $C1.cloo    ;cclo .      .olc.    coooooooool   \n\
-oooo   :lo,    ;ll;    looc    :oooooooool   \n\
- oooc   ool.   ;oooc;clol    :looooooooool   \n\
-  :ooc   ,ol;  ;oooooo.   .cloo;     loool   \n\
-    ool;   .olc.       ,:lool        .lool   \n\
-      ool:.    ,::::ccloo.        :clooool   \n\
-         oolc::.            ':cclooooooool   \n\
-               ;oooooooooooooooooooooooool   \n\
-                                             \n\
-                                             \n\
+oooo   :lo,    ;ll;    looc    :oooooooool      \n\
+ oooc   ool.   ;oooc;clol    :looooooooool      \n\
+  :ooc   ,ol;  ;oooooo.   .cloo;     loool      \n\
+    ool;   .olc.       ,:lool        .lool      \n\
+      ool:.    ,::::ccloo.        :clooool      \n\
+         oolc::.            ':cclooooooool      \n\
+               ;oooooooooooooooooooooooool      \n\
+                                                \n\
 $C2######.  ##   ##  ##  ######   ##    ###     \n\
 $C2##   ##  ##   ##  ##  ##   ##  ##   #: :#    \n\
 $C2##   ##   ## ##   ##  ##   ##  ##  #######   \n\
 $C2##   ##    ###    ##  ######   ## ##     ##  \n";
+
+const ASCII_POWERPC: &str = "\
+$C1     //////                                   //////    /////  \n\
+$C1    //// /// ,//// /// ///  /// /////  ///// /// ////////      \n\
+$C1   */////// /// ///////////// /// /// ///// ////////////       \n\
+$C1   ///     /// /// ///////// ///     ///   ///        ////.    \n\
+$C1  ///      /////   //  ///     //// ///   ///          /////   \n";
 
 fn logo_lines_for_vendor(vendor_id: &str) -> Option<Vec<String>> {
     let (raw_logo, colors): (&str, &[&str]) = match vendor_id {
@@ -74,6 +80,7 @@ fn logo_lines_for_vendor(vendor_id: &str) -> Option<Vec<String>> {
         "GenuineIntel" => (ASCII_INTEL_NEW, &[C_FG_CYAN]),
         "ARM" => (ASCII_ARM, &[C_FG_CYAN]),
         "NVIDIA" => (ASCII_NVIDIA, &[C_FG_GREEN, C_FG_WHITE]),
+        "PowerPC" => (ASCII_POWERPC, &[C_FG_YELLOW]),
         _ => return None,
     };
     let mut processed_logo = raw_logo.to_string();

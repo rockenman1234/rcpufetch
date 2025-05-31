@@ -6,6 +6,7 @@ Thank you for your interest in contributing to **rcpufetch**! This document will
 - [Project Overview](#project-overview)
 - [Codebase Structure](#codebase-structure)
 - [Architecture Overview](#architecture-overview)
+- [CLI Features and Options](#cli-features-and-options)
 - [Linux Implementation Deep Dive](#linux-implementation-deep-dive)
 - [How to Contribute](#how-to-contribute)
 - [Adding Features for Each OS](#adding-features-for-each-os)
@@ -59,10 +60,13 @@ rcpufetch/
 
 The application follows a consistent pattern across operating systems:
 
-1. **OS Detection**: `main.rs` uses `std::env::consts::OS` to detect the current operating system
-2. **Module Dispatch**: Based on OS detection, the appropriate module is called (Linux, Windows, etc.)
-3. **Information Gathering**: Each OS module implements a `new()` method that gathers CPU information using OS-specific APIs
-4. **Display Formatting**: Each module implements a `display_info()` method that formats and displays the information alongside vendor logos
+1. **CLI Parsing**: `main.rs` uses `clap` to parse command-line arguments (`--logo`, `--no-logo`)
+2. **OS Detection**: `main.rs` uses `std::env::consts::OS` to detect the current operating system
+3. **Module Dispatch**: Based on OS detection, the appropriate module is called (Linux, Windows, etc.)
+4. **Information Gathering**: Each OS module implements a `new()` method that gathers CPU information using OS-specific APIs
+5. **Display Formatting**: Each module implements display methods that format and display the information:
+   - `display_info_with_logo(logo_override)` - Shows info with vendor logo (actual or CLI-overridden)
+   - `display_info_no_logo()` - Shows info without any logo for clean text output
 
 ### Common Struct Pattern
 
@@ -80,11 +84,133 @@ impl OSCpuInfo {
         // OS-specific information gathering
     }
     
-    pub fn display_info(&self) {
-        // Formatted display with logo
+    pub fn display_info_with_logo(&self, logo_override: Option<&str>) {
+        // Display with vendor logo (actual or overridden)
+    }
+    
+    pub fn display_info_no_logo(&self) {
+        // Display without any logo
+    }
+    
+    fn get_info_lines(&self) -> Vec<String> {
+        // Helper method to generate formatted info lines
     }
 }
 ```
+
+The display methods integrate with the CLI system:
+- `display_info_with_logo()` is called when no `--no-logo` flag is present
+- `display_info_no_logo()` is called when `--no-logo` flag is present
+- The `logo_override` parameter contains the vendor ID when `--logo` flag is used
+
+## CLI Features and Options
+
+rcpufetch provides several command-line options to customize the display output. The CLI is implemented using the `clap` crate in `src/main.rs` and supports the following features:
+
+### Available Options
+
+#### Logo Override (`--logo` / `-l`)
+```bash
+rcpufetch --logo nvidia
+rcpufetch -l powerpc
+```
+
+Allows users to override the displayed vendor logo regardless of their actual CPU vendor. This is useful for:
+- **Demonstration purposes**: Show how the tool looks with different logos
+- **Preference**: Users may prefer a specific vendor's logo aesthetic
+- **Testing**: Developers can test logo display without different hardware
+
+**Supported vendor options:**
+- `nvidia` - NVIDIA logo with green/white color scheme
+- `amd` - AMD logo with red/white color scheme  
+- `intel` - Intel logo with cyan color scheme
+- `arm` - ARM logo with cyan color scheme
+- `powerpc` - PowerPC logo with yellow color scheme
+
+The logo option is **case-insensitive**, so `nvidia`, `NVIDIA`, and `Nvidia` all work.
+
+#### Disable Logo (`--no-logo` / `-n`)
+```bash
+rcpufetch --no-logo
+rcpufetch -n
+```
+
+Completely disables logo display for clean text-only output. This is useful for:
+- **Scripting**: When you need machine-readable output
+- **Minimal displays**: For use in constrained environments
+- **Accessibility**: For users who prefer text-only interfaces
+
+### CLI Implementation Details
+
+The CLI argument parsing is handled in `src/main.rs` using the following structure:
+
+```rust
+#[derive(Parser)]
+#[command(author, version, about = "A CPU information fetcher", long_about = None)]
+struct Args {
+    /// Disable logo display
+    #[arg(short = 'n', long = "no-logo")]
+    no_logo: bool,
+    
+    /// Override logo display with specific vendor
+    #[arg(short = 'l', long = "logo", value_name = "VENDOR")]
+    logo: Option<String>,
+}
+```
+
+#### Logo Processing Logic
+
+1. **Logo Override Processing**: The logo argument is converted to the internal vendor ID format:
+   ```rust
+   let logo_override = args.logo.as_ref().map(|logo| {
+       match logo.to_lowercase().as_str() {
+           "nvidia" => "NVIDIA",
+           "powerpc" => "PowerPC", 
+           "arm" => "ARM",
+           "amd" => "AuthenticAMD",
+           "intel" => "GenuineIntel",
+           _ => {
+               // Warning for unknown vendors
+               return None;
+           }
+       }
+   }).flatten();
+   ```
+
+2. **Display Method Selection**: Based on the CLI arguments, the appropriate display method is called:
+   ```rust
+   if args.no_logo {
+       cpu_info.display_info_no_logo();
+   } else {
+       cpu_info.display_info_with_logo(logo_override);
+   }
+   ```
+
+#### Error Handling
+
+- **Unknown logo vendors**: Display a warning message but continue execution with the actual vendor logo
+- **Invalid arguments**: Handled automatically by `clap` with helpful error messages
+- **Conflicting options**: `--no-logo` takes precedence over `--logo` if both are specified
+
+### Adding New CLI Options
+
+When adding new CLI options, follow this pattern:
+
+1. **Add to Args struct** in `src/main.rs`:
+   ```rust
+   /// New option description
+   #[arg(long = "new-option")]
+   new_option: bool,
+   ```
+
+2. **Update display method calls** to pass the new option:
+   ```rust
+   cpu_info.display_info_with_options(logo_override, args.new_option);
+   ```
+
+3. **Implement option handling** in each OS module's display methods.
+
+4. **Update documentation** in both README.md and CONTRIBUTING.md.
 
 ## Linux Implementation Deep Dive
 
@@ -283,16 +409,24 @@ To add a new field (e.g., CPU temperature, power consumption, microcode version)
    }
    ```
 
-4. **Update the `display_info()` method**:
+4. **Update the display methods**:
    ```rust
-   let info_lines = vec![
-       // ...existing lines...
-       format!("Temperature: {}", match self.temperature {
-           Some(temp) => format!("{:.1}°C", temp),
-           None => "Unknown".to_string()
-       }),
-   ];
+   // Update both display methods to include the new field
+   fn get_info_lines(&self) -> Vec<String> {
+       vec![
+           // ...existing lines...
+           format!("Temperature: {}", match self.temperature {
+               Some(temp) => format!("{:.1}°C", temp),
+               None => "Unknown".to_string()
+           }),
+       ]
+   }
    ```
+
+   Note: Since the CLI refactoring, each OS module now implements:
+   - `display_info_with_logo(logo_override: Option<&str>)` - For logo display with optional override
+   - `display_info_no_logo()` - For text-only output
+   - `get_info_lines()` - Helper method that generates formatted info lines
 
 #### Working with Linux System Files
 
@@ -396,14 +530,31 @@ To add support for a new OS (e.g., macOS, FreeBSD, Solaris):
 
 ## ASCII Art and Logo System
 
-The logo system in `src/art/logos.rs` provides vendor-specific ASCII art with color support.
+The logo system in `src/art/logos.rs` provides vendor-specific ASCII art with color support and integrates with the CLI `--logo` flag for logo override functionality.
 
 ### Current Vendor Support
 
-- **AMD**: Red and white color scheme
-- **Intel**: Cyan color scheme
-- **ARM**: Cyan color scheme  
-- **NVIDIA**: Green and white color scheme
+- **AMD**: Red and white color scheme (`AuthenticAMD`)
+- **Intel**: Cyan color scheme (`GenuineIntel`)
+- **ARM**: Cyan color scheme (`ARM`)
+- **NVIDIA**: Green and white color scheme (`NVIDIA`)
+- **PowerPC**: Yellow color scheme (`PowerPC`)
+
+### CLI Integration
+
+The logo system integrates with the command-line interface in the following ways:
+
+1. **Logo Override**: The `--logo` flag maps user-friendly names to internal vendor IDs:
+   - `nvidia` → `NVIDIA`
+   - `amd` → `AuthenticAMD`
+   - `intel` → `GenuineIntel`
+   - `arm` → `ARM`
+   - `powerpc` → `PowerPC`
+
+2. **Logo Display**: The `get_logo_lines_for_vendor()` function is called with either:
+   - The actual CPU vendor ID (default behavior)
+   - The overridden vendor ID (when `--logo` is used)
+   - No logo (when `--no-logo` is used)
 
 ### Adding New Vendor Logos
 
@@ -422,11 +573,27 @@ The logo system in `src/art/logos.rs` provides vendor-specific ASCII art with co
    ```rust
    fn logo_lines_for_vendor(vendor_id: &str) -> Option<Vec<String>> {
        let (raw_logo, colors): (&str, &[&str]) = match vendor_id {
-           // ...existing vendors...
+           "AuthenticAMD" => (ASCII_AMD, &[C_FG_WHITE, C_FG_RED]),
+           "GenuineIntel" => (ASCII_INTEL_NEW, &[C_FG_CYAN]),
+           "ARM" => (ASCII_ARM, &[C_FG_CYAN]),
+           "NVIDIA" => (ASCII_NVIDIA, &[C_FG_GREEN, C_FG_WHITE]),
+           "PowerPC" => (ASCII_POWERPC, &[C_FG_YELLOW]),
            "NewVendorID" => (ASCII_NEW_VENDOR, &[C_FG_BLUE, C_FG_WHITE]),
            _ => return None,
        };
        // ...rest of function
+   }
+   ```
+
+4. **Update CLI mapping** in `src/main.rs` to include the user-friendly name:
+   ```rust
+   match logo.to_lowercase().as_str() {
+       // ...existing mappings...
+       "newvendor" => "NewVendorID",
+       _ => {
+           eprintln!("Warning: Unknown logo vendor...");
+           return None;
+       }
    }
    ```
 

@@ -13,10 +13,29 @@ struct Args {
     /// Disable logo display
     #[arg(short = 'n', long = "no-logo")]
     no_logo: bool,
+    
+    /// Override logo display with specific vendor (nvidia, powerpc, arm, amd, intel)
+    #[arg(short = 'l', long = "logo", value_name = "VENDOR")]
+    logo: Option<String>,
 }
 
 fn main() {
-    let _args = Args::parse();
+    let args = Args::parse();
+
+    // Convert logo argument to vendor ID format if provided
+    let logo_override = args.logo.as_ref().and_then(|logo| {
+        match logo.to_lowercase().as_str() {
+            "nvidia" => Some("NVIDIA"),
+            "powerpc" => Some("PowerPC"),
+            "arm" => Some("ARM"),
+            "amd" => Some("AuthenticAMD"),
+            "intel" => Some("GenuineIntel"),
+            _ => {
+                eprintln!("Warning: Unknown logo vendor '{}'. Valid options: nvidia, powerpc, arm, amd, intel", logo);
+                None
+            }
+        }
+    });
 
     // Detect OS and use appropriate module
     let os = env::consts::OS;
@@ -25,7 +44,11 @@ fn main() {
         "linux" => {
             match LinuxCpuInfo::new() {
                 Ok(cpu_info) => {
-                    cpu_info.display_info();
+                    if args.no_logo {
+                        cpu_info.display_info_no_logo();
+                    } else {
+                        cpu_info.display_info_with_logo(logo_override);
+                    }
                 }
                 Err(e) => {
                     eprintln!("Error fetching CPU info: {}", e);
@@ -36,7 +59,11 @@ fn main() {
             use crate::windows::windows::WindowsCpuInfo;
             match WindowsCpuInfo::new() {
                 Ok(cpu_info) => {
-                    cpu_info.display_info();
+                    if args.no_logo {
+                        cpu_info.display_info_no_logo();
+                    } else {
+                        cpu_info.display_info_with_logo(logo_override);
+                    }
                 }
                 Err(e) => {
                     eprintln!("Error fetching CPU info: {}", e);
