@@ -463,8 +463,7 @@ fn parse_cache_size(size_str: &str) -> Result<u32, String> {
 ```
 
 ### Windows Development Guidelines
-
-The Windows implementation uses PowerShell and WMI queries to gather system information.
+TBD
 
 #### Windows-Specific Considerations
 TBD
