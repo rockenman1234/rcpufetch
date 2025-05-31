@@ -20,11 +20,14 @@
 
 | OS          | x86_64 / x86       | ARM                | RISC-V             | PowerPC            |
 |:-----------:|:------------------:|:------------------:|:------------------:|:------------------:|
-| GNU / Linux | :heavy_check_mark: | :question          | :question:         | :question:         |
+| GNU / Linux | :heavy_check_mark: | :question:         | :question:         | :question:         |
 | Windows     | :x:                | :x:                | -                  | -                  |
 | MacOS       | :x:                | :x:                | -                  | :x:                |
 | FreeBSD     | :x:                | :x:                | :x:                | :x:                |
 
+
+> [!WARNING]
+> Linux should be cross platform now, I haven't tested it or added more logos beyond x86 - TBD.
 
 ## Installation
 1. Clone the repository:
