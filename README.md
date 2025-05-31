@@ -14,11 +14,11 @@
 - Clean codebase - nothing but Rust in here!
 - Horizontally aligned output for easy reading, complete with logo support
 
-## Screenshot
+## Screenshots
 ![Main Screenshot](.github/assets/Screenshot_AMD.png)
 ![Secondary Screenshot](.github/assets/Screenshot_APPLE.png)
 
-## 1. Current Support
+## 1. Current Support Table
 
 | OS          | x86_64 / x86       | ARM                | RISC-V             | PowerPC            |
 |:-----------:|:------------------:|:------------------:|:------------------:|:------------------:|
@@ -32,9 +32,18 @@
 > Linux & MacOS should be universal now, I haven't tested it or added more logos beyond x86_64 for Linux and arm64 for MacOS - TBD.
 
 ## Installation
+You currenty have 2 ways to install `rcpufetch` for your system.
+
+### From `crates.io`
+Run the following command below to install rcpufetch for your OS automatically.
+```
+cargo install rcpufetch
+```
+
+### From Source
 1. Clone the repository:
    ```
-   git clone https://github.com/yourusername/rcpufetch.git
+   git clone https://github.com/rockenman1234/rcpufetch.git
    cd rcpufetch
    ```
 2. Build with Cargo:
