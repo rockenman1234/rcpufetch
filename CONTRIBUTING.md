@@ -467,18 +467,10 @@ fn parse_cache_size(size_str: &str) -> Result<u32, String> {
 The Windows implementation uses PowerShell and WMI queries to gather system information.
 
 #### Windows-Specific Considerations
-
-- **PowerShell dependency**: Commands must work on PowerShell 5.1+ (Windows 10/11 default)
-- **WMI classes**: Use established WMI classes like `Win32_Processor`, `Win32_CacheMemory`
-- **JSON parsing**: PowerShell output is converted to JSON for easy parsing
-- **Error handling**: PowerShell commands can fail; implement proper fallbacks
+TBD
 
 #### Adding Windows Features
-
-1. **Research WMI classes**: Find the appropriate WMI class for your data
-2. **Test PowerShell commands**: Verify commands work across Windows versions
-3. **Update `WindowsCpuInfo`**: Add fields and parsing logic
-4. **Handle differences**: Windows may provide different information than Linux
+TBD
 
 ### macOS Development Guidelines
 
