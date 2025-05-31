@@ -2,9 +2,6 @@ mod linux; // Declares the linux module (src/linux/mod.rs)
 mod art; // Declares the art module (src/art.rs)
 mod windows; // Declares the windows module (src/windows/mod.rs)
 mod macos; // Declares the macos module (src/macos/mod.rs)
-
-// Use the LinuxCpuInfo struct from the nested linux module
-use crate::linux::linux::LinuxCpuInfo;
 use clap::Parser;
 use std::env;
 
@@ -68,6 +65,7 @@ fn main() {
     
     match os {
         "linux" => {
+            use crate::linux::linux::LinuxCpuInfo;
             match LinuxCpuInfo::new() {
                 Ok(cpu_info) => {
                     if args.no_logo {
