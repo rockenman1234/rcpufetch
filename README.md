@@ -28,7 +28,7 @@
 | FreeBSD     | ❌                 | ❌                 | ❌                 | ❌                |
 
 
-> [!WARNING]
+> [!NOTE]
 > Linux & MacOS should be universal now, I haven't tested it or added more logos beyond x86_64 for Linux and arm64 for MacOS - TBD.
 
 ## Installation
