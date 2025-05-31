@@ -19,8 +19,8 @@
 | OS          | x86_64 / x86       | ARM                | RISC-V             | PowerPC            |
 |:-----------:|:------------------:|:------------------:|:------------------:|:------------------:|
 | GNU / Linux | :heavy_check_mark: | :x:                | :x:                | :x:                |
-| Windows     | :heavy_check_mark: | :x:                | :x:                | :x:                |
-| macOS       | :x:                | :x:                | :x:                | :x:                |
+| Windows     | :heavy_check_mark: | :x:                | -                  | -                  |
+| MacOS       | :x:                | :x:                | -                  | :x:                |
 | FreeBSD     | :x:                | :x:                | :x:                | :x:                |
 
 
