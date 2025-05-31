@@ -23,7 +23,7 @@
 |:-----------:|:------------------:|:------------------:|:------------------:|:------------------:|
 | GNU / Linux | :heavy_check_mark: | :question:         | :question:         | :question:         |
 | Windows     | :x:                | :x:                | -                  | -                  |
-| MacOS       | :question:         | :heavy_check_mark: | -                  | :x:                |
+| MacOS       | :question:         | :heavy_check_mark: | -                  | :question:         |
 | FreeBSD     | :x:                | :x:                | :x:                | :x:                |
 
 
