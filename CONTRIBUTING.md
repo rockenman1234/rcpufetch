@@ -754,6 +754,7 @@ impl SolarisCpuInfo {
         // Determine vendor from processor information
     }
 }
+```
 
 ___
 
