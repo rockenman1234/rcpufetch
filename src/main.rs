@@ -8,6 +8,20 @@ use crate::linux::linux::LinuxCpuInfo;
 use clap::Parser;
 use std::env;
 
+/// Print license information
+fn print_license() {
+    println!("Copyright (C) 2025 - Present: Kenneth A. Jenkins, Alan D. Aguilar, & contributors.");
+    println!("Licensed under the GNU GPLv3: GNU General Public License version 3.");
+    println!("rcpufetch comes with ABSOLUTELY NO WARRANTY.");
+    println!();
+    println!("A copy of the GNU General Public License Version 3 should");
+    println!("have been provided with rcpufetch. If not, you can");
+    println!("find it at: <https://www.gnu.org/licenses/gpl-3.0.html>.");
+    println!();
+    println!("This is free software, and you are welcome to redistribute it");
+    println!("under certain conditions, as described above. Type `rcpufetch --help` for assistance.");
+}
+
 #[derive(Parser)]
 #[command(author, version, about = "A CPU information fetcher", long_about = None)]
 struct Args {
@@ -18,10 +32,20 @@ struct Args {
     /// Override logo display with specific vendor (nvidia, powerpc, arm, amd, intel, apple)
     #[arg(short = 'l', long = "logo", value_name = "VENDOR")]
     logo: Option<String>,
+    
+    /// Display license information
+    #[arg(long = "license")]
+    license: bool,
 }
 
 fn main() {
     let args = Args::parse();
+
+    // Handle license flag
+    if args.license {
+        print_license();
+        return;
+    }
 
     // Convert logo argument to vendor ID format if provided
     let logo_override = args.logo.as_ref().and_then(|logo| {

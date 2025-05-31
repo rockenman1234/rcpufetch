@@ -3,6 +3,8 @@ use std::process::Command;
 pub struct MacOSCpuInfo {
     model: String,
     vendor: String,
+    architecture: String,
+    byte_order: String,
     physical_cores: u32,
     logical_cores: u32,
     base_mhz: Option<f32>,
@@ -16,6 +18,20 @@ impl MacOSCpuInfo {
     pub fn new() -> Result<Self, String> {
         // Get CPU brand string
         let model = Self::get_sysctl_string("machdep.cpu.brand_string")?;
+        
+        // Get architecture using uname -m
+        let architecture = Self::get_architecture()?;
+        
+        // Get byte order from sysctl and format it
+        let byte_order = Self::get_sysctl_string("hw.byteorder")
+            .map(|order| {
+                match order.trim() {
+                    "1234" => "Little Endian".to_string(),
+                    "4321" => "Big Endian".to_string(),
+                    _ => format!("Unknown ({})", order)
+                }
+            })
+            .unwrap_or_else(|_| "Unknown".to_string());
         
         // Determine vendor from brand string
         let vendor = if model.to_lowercase().contains("intel") {
@@ -48,6 +64,8 @@ impl MacOSCpuInfo {
         Ok(Self {
             model,
             vendor,
+            architecture,
+            byte_order,
             physical_cores,
             logical_cores,
             base_mhz,
@@ -139,6 +157,20 @@ impl MacOSCpuInfo {
         let value_str = Self::get_sysctl_string(key)?;
         value_str.parse::<u32>()
             .map_err(|e| format!("Failed to parse '{}' as u32: {}", value_str, e))
+    }
+
+    /// Get system architecture using uname -m
+    fn get_architecture() -> Result<String, String> {
+        let output = Command::new("uname")
+            .arg("-m")
+            .output()
+            .map_err(|e| format!("Failed to execute uname: {}", e))?;
+        
+        if output.status.success() {
+            Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+        } else {
+            Err("uname command failed".to_string())
+        }
     }
 
     /// Get CPU flags from sysctl hw.optional.arm.* keys.
@@ -286,6 +318,8 @@ impl MacOSCpuInfo {
     fn get_info_lines(&self) -> Vec<String> {
         let mut lines = vec![
             format!("Name: {}", self.model),
+            format!("Architecture: {}", self.architecture),
+            format!("Byte Order: {}", self.byte_order),
             format!("Vendor: {}", self.vendor),
             format!("Cores: {} cores ({} threads)", self.physical_cores, self.logical_cores),
         ];
