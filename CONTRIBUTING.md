@@ -9,11 +9,13 @@ Thank you for your interest in contributing to **rcpufetch**! This document will
 - [CLI Features and Options](#cli-features-and-options)
 - [Linux Implementation Deep Dive](#linux-implementation-deep-dive)
 - [How to Contribute](#how-to-contribute)
-- [Adding Features for Each OS](#adding-features-for-each-os)
+- [Adding Features for Each OS](#adding-features-for-existing-os)
 - [Coding Style](#coding-style)
 - [Testing Guidelines](#testing-guidelines)
 - [Reporting Issues](#reporting-issues)
 - [Pull Request Process](#pull-request-process)
+
+___
 
 ## Project Overview
 
@@ -27,6 +29,8 @@ The tool provides comprehensive CPU information including:
 - Multi-level cache sizes (L1, L2, L3)
 - CPU flags and capabilities
 - Colorized vendor logos displayed alongside the information
+
+___
 
 ## Codebase Structure
 
@@ -58,6 +62,8 @@ rcpufetch/
 - **`src/windows/windows.rs`**: Windows implementation using PowerShell and WMI queries to gather CPU information.
 - **`src/macos/macos.rs`**: macOS implementation using `sysctl` command and system APIs to gather CPU information, with special handling for Apple Silicon performance levels.
 - **`src/art/logos.rs`**: Contains ASCII art for different CPU vendors (AMD, Intel, ARM, NVIDIA, PowerPC, Apple) with color formatting support.
+
+___
 
 ## Architecture Overview
 
@@ -105,6 +111,8 @@ The display methods integrate with the CLI system:
 - `display_info_with_logo()` is called when no `--no-logo` flag is present
 - `display_info_no_logo()` is called when `--no-logo` flag is present
 - The `logo_override` parameter contains the vendor ID when `--logo` flag is used
+
+___
 
 ## CLI Features and Options
 
@@ -216,6 +224,8 @@ When adding new CLI options, follow this pattern:
 
 4. **Update documentation** in both README.md and CONTRIBUTING.md.
 
+___
+
 ## Linux Implementation Deep Dive
 
 The Linux implementation in `src/linux/linux.rs` is the most comprehensive and serves as the reference implementation. Understanding this code is crucial for contributors.
@@ -306,6 +316,8 @@ The Linux implementation uses comprehensive error handling:
 - Parsing errors fall back to default values where appropriate
 - All public methods return `Result<T, String>` for proper error propagation
 
+___
+
 ## How to Contribute
 
 ### Prerequisites
@@ -371,7 +383,10 @@ Before contributing, ensure you have:
 - **Check edge cases**: Consider systems with unusual configurations (very old CPUs, virtual machines, containers)
 - **Performance considerations**: The tool should remain fast and lightweight
 
-## Adding Features for Each OS
+___
+
+
+## Adding New Features for Existing OS
 
 ### Linux Development Guidelines
 
@@ -461,6 +476,10 @@ fn parse_cache_size(size_str: &str) -> Result<u32, String> {
     // parsing logic
 }
 ```
+
+___ 
+
+## Implementation Notes
 
 ### Windows Development Guidelines
 TBD
@@ -642,9 +661,11 @@ To add new CPU information for macOS:
 - **Privilege requirements**: Some sysctl keys may require elevated privileges
 - **CPU flags support**: ARM feature flags are available on Apple Silicon via `hw.optional.arm.*` keys
 
-### Adding Support for New Operating Systems
+___
 
-To add support for a new OS (e.g., Solaris, FreeBSD, OpenBSD):
+## Adding Support for New Operating Systems
+
+To add support for a new OS (e.x. Solaris):
 
 1. **Create OS directory structure**:
    ```
@@ -694,10 +715,7 @@ To add support for a new OS (e.g., Solaris, FreeBSD, OpenBSD):
    ```
 
 4. **Research OS-specific APIs**:
-   - **Solaris**: `psrinfo`, `kstat`, `prtconf`, `/proc/cpuinfo` (if available)
-   - **FreeBSD**: `sysctl`, `/proc` (if mounted), `dmesg`
-   - **OpenBSD/NetBSD**: `sysctl`, machine-specific files, `dmesg`
-   - **AIX**: `lsattr`, `lscfg`, `prtconf`
+   - **Ex. Solaris**: `psrinfo`, `kstat`, `prtconf`, `/proc/cpuinfo` (if available)
 
 #### Solaris Implementation Guidelines
 
@@ -734,6 +752,8 @@ impl SolarisCpuInfo {
         // Determine vendor from processor information
     }
 }
+
+___
 
 ## ASCII Art and Logo System
 
@@ -815,6 +835,8 @@ Available colors are defined as ANSI escape sequences:
 
 Use `$C1`, `$C2`, etc. as placeholders in ASCII art, then specify the color array in the match statement.
 
+___
+
 ## Coding Style
 
 ### Rust Conventions
@@ -873,6 +895,8 @@ pub fn my_function(param1: &str, param2: u32) -> Result<String, String> {
 - **Caching**: Cache expensive system calls when appropriate
 - **Early returns**: Use early returns to avoid deep nesting
 
+___
+
 ## Testing Guidelines
 
 ### Manual Testing
@@ -883,26 +907,7 @@ Since the project deals with system information, manual testing is crucial:
 2. **Test edge cases**: Try on systems with unusual configurations
 3. **Performance testing**: Ensure the tool remains fast even on slower systems
 4. **Output validation**: Verify that displayed information is accurate
-
-### macOS-Specific Testing
-
-For macOS CPU flags functionality:
-
-1. **Apple Silicon testing**: Verify flags detection works on M1/M2/M3 chips:
-   ```bash
-   # Test basic functionality
-   cargo run
-   
-   # Test no-logo mode for clean flags output
-   cargo run -- --no-logo
-   
-   # Verify flags match system capabilities
-   sysctl hw.optional.arm. | grep ": 1"
-   ```
-
-2. **Intel Mac testing**: Ensure graceful handling on Intel Macs where ARM flags may not be available
-
-3. **Error resilience**: Test behavior when sysctl commands fail or return unexpected output
+5. **Error resilience**: Test behavior when sysctl commands fail or return unexpected output
 
 ### Automated Testing Considerations
 
@@ -924,6 +929,8 @@ Before submitting a PR, verify:
 - [ ] Provides reasonable fallbacks for missing information
 - [ ] Output is readable and properly aligned
 - [ ] Performance is acceptable (< 1 second startup time)
+
+___
 
 ## Reporting Issues
 
@@ -963,6 +970,8 @@ Use these formats for consistency:
 - OS support: Linux (primary), macOS, Windows (future)
 - Data source: /sys/class/thermal/ on Linux, sysctl on macOS
 ```
+
+___
 
 ## Pull Request Process
 
