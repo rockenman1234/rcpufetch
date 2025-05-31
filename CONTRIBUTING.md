@@ -6,7 +6,7 @@ Thank you for your interest in contributing to **rcpufetch**! This document will
 - [Project Overview](#project-overview)
 - [Codebase Structure](#codebase-structure)
 - [Architecture Overview](#architecture-overview)
-- [CLI Features and Options](#cli-features-and-options)
+- [CLI Implementation Details](#cli-implementation-details)
 - [Linux Implementation Deep Dive](#linux-implementation-deep-dive)
 - [How to Contribute](#how-to-contribute)
 - [Adding New Features for Existing OS](#adding-new-features-for-existing-os)
@@ -116,45 +116,7 @@ The display methods integrate with the CLI system:
 
 ___
 
-## CLI Features and Options
-
-rcpufetch provides several command-line options to customize the display output. The CLI is implemented using the `clap` crate in `src/main.rs` and supports the following features:
-
-### Available Options
-
-#### Logo Override (`--logo` / `-l`)
-```bash
-rcpufetch --logo nvidia
-rcpufetch -l powerpc
-```
-
-Allows users to override the displayed vendor logo regardless of their actual CPU vendor. This is useful for:
-- **Demonstration purposes**: Show how the tool looks with different logos
-- **Preference**: Users may prefer a specific vendor's logo aesthetic
-- **Testing**: Developers can test logo display without different hardware
-
-**Supported vendor options:**
-- `nvidia` - NVIDIA logo with green/white color scheme
-- `amd` - AMD logo with red/white color scheme  
-- `intel` - Intel logo with cyan color scheme
-- `arm` - ARM logo with cyan color scheme
-- `powerpc` - PowerPC logo with yellow color scheme
-- `apple` - Apple logo with rainbow color scheme
-
-The logo option is **case-insensitive**, so `nvidia`, `NVIDIA`, and `Nvidia` all work.
-
-#### Disable Logo (`--no-logo` / `-n`)
-```bash
-rcpufetch --no-logo
-rcpufetch -n
-```
-
-Completely disables logo display for clean text-only output. This is useful for:
-- **Scripting**: When you need machine-readable output
-- **Minimal displays**: For use in constrained environments
-- **Accessibility**: For users who prefer text-only interfaces
-
-### CLI Implementation Details
+## CLI Implementation Details
 
 The CLI argument parsing is handled in `src/main.rs` using the following structure:
 
