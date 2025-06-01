@@ -647,8 +647,7 @@ While comprehensive unit testing is challenging for system information tools, co
 
 Before submitting a PR, verify:
 - [ ] Compiles without warnings (`cargo build`)
-- [ ] Passes clippy checks (`cargo clippy`)
-- [ ] Formatted correctly (`cargo fmt`)
+- [ ] Your code is documented correctly, as outlined here
 - [ ] Works on intended operating system
 - [ ] Handles error conditions gracefully
 - [ ] Provides reasonable fallbacks for missing information
