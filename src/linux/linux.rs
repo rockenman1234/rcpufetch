@@ -449,7 +449,12 @@ impl LinuxCpuInfo {
                 info_idx += 1;
                 s.as_str().to_string()
             } else if !flag_lines.is_empty() {
-                flag_lines.remove(0)
+                let mut flag_line = flag_lines.remove(0);
+                // If there's no logo content on this line, remove the indent from flag lines
+                if logo.is_empty() && flag_line.starts_with(indent) {
+                    flag_line = flag_line[indent.len()..].to_string();
+                }
+                flag_line
             } else {
                 String::new()
             };

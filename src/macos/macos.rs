@@ -266,7 +266,14 @@ impl MacOSCpuInfo {
         // Print logo and info side by side
         for i in 0..max_lines {
             let logo = logo_lines.get(i).map(|s| s.as_str()).unwrap_or("");
-            let info = info_lines.get(i).map(|s| s.as_str()).unwrap_or("");
+            let mut info = info_lines.get(i).map(|s| s.as_str()).unwrap_or("").to_string();
+            
+            // If there's no logo content on this line, remove the indent from flag lines
+            let indent = "       "; // 7 spaces to align with "Flags: "
+            if logo.is_empty() && info.starts_with(indent) {
+                info = info[indent.len()..].to_string();
+            }
+            
             println!("{:<width$}{}{}", logo, sep, info, width=logo_width);
         }
     }
