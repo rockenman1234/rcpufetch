@@ -483,14 +483,6 @@ The macOS implementation in `src/macos/macos.rs` provides comprehensive CPU info
 
 ___
 
-## Documentation Standards for cla.rs
-
-- All public structs, methods, and helper functions in `cla.rs` must be documented using `///` doc comments.
-- Each function should include a summary, argument descriptions, return value, and error conditions if applicable.
-- See the "Coding Style" section for documentation templates and the `linux.rs` file for real-world examples.
-
-___
-
 ## ASCII Art and Logo System
 
 The logo system in `src/art/logos.rs` provides vendor-specific ASCII art with color support and integrates with the CLI `--logo` flag for logo override functionality.
