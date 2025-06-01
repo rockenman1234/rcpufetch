@@ -43,6 +43,7 @@ rcpufetch/
 ├── Cargo.toml               # Project dependencies and metadata
 ├── src/
 │   ├── main.rs             # Entry point, CLI parsing, OS dispatch
+│   ├── cla.rs              # Command line argument handler
 │   ├── linux/              # Linux-specific implementation
 │   │   ├── linux.rs        # Core Linux CPU info parsing and display
 │   │   └── mod.rs          # Linux module declaration
@@ -52,7 +53,6 @@ rcpufetch/
 │   ├── macos/              # macOS-specific implementation
 │   │   ├── macos.rs        # macOS CPU info via sysctl and system APIs
 │   │   └── mod.rs          # macOS module declaration
-│   ├── cla.rs              # Command line argument parsing (manual, no external dependencies)
 │   └── art/                # ASCII art and visual components
 │       ├── logos.rs        # Vendor ASCII art and color definitions
 │       └── mod.rs          # Art module declaration
