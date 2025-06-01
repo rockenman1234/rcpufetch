@@ -339,12 +339,6 @@ Before contributing, ensure you have:
    
    # Test different scenarios if applicable
    cargo run -- --no-logo
-   
-   # Check for compilation warnings
-   cargo clippy
-   
-   # Format your code
-   cargo fmt
    ```
 
 6. **Commit and push** your changes:
