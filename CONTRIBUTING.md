@@ -576,12 +576,9 @@ ___
 ## Coding Style
 
 ### Rust Conventions
-
-- **Follow rustfmt**: Use `cargo fmt` to format code automatically
-- **Use clippy**: Run `cargo clippy` and fix warnings
 - **Documentation**: Use `///` doc comments for all public items
 - **Error handling**: Use `Result<T, String>` for fallible operations
-- **Naming**: Use snake_case for variables/functions, PascalCase for types
+- **Naming**: Use snake_case for variables/functions, PascalCase for types (we won't shoot you in a PR, but it's what we follow)
 
 ### Documentation Standards
 
