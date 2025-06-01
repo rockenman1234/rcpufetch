@@ -52,6 +52,7 @@ rcpufetch/
 │   ├── macos/              # macOS-specific implementation
 │   │   ├── macos.rs        # macOS CPU info via sysctl and system APIs
 │   │   └── mod.rs          # macOS module declaration
+│   ├── cla.rs              # Command line argument parsing (manual, no external dependencies)
 │   └── art/                # ASCII art and visual components
 │       ├── logos.rs        # Vendor ASCII art and color definitions
 │       └── mod.rs          # Art module declaration
@@ -59,7 +60,8 @@ rcpufetch/
 
 ### Key Files Explained
 
-- **`src/main.rs`**: Entry point that handles CLI argument parsing using `clap`, detects the operating system, and dispatches to the appropriate OS-specific module.
+- **`src/main.rs`**: Entry point that handles CLI argument parsing, detects the operating system, and dispatches to the appropriate OS-specific module.
+- **`src/cla.rs`**: Implements manual command-line argument parsing, help/version/license/completions output, and all CLI option handling. No external dependencies are used for argument parsing.
 - **`src/linux/linux.rs`**: Contains the complete Linux implementation including `/proc/cpuinfo` parsing, sysfs cache information reading, and formatted display output.
 - **`src/windows/windows.rs`**: Windows implementation using PowerShell and WMI queries to gather CPU information.
 - **`src/macos/macos.rs`**: macOS implementation using `sysctl` command and system APIs to gather CPU information, with special handling for Apple Silicon performance levels.
@@ -71,7 +73,7 @@ ___
 
 The application follows a consistent pattern across operating systems:
 
-1. **CLI Parsing**: `main.rs` uses `clap` to parse command-line arguments (`--logo`, `--no-logo`)
+1. **CLI Parsing**: `main.rs` calls into `cla.rs` to parse command-line arguments (`--logo`, `--no-logo`, etc.)
 2. **OS Detection**: `main.rs` uses `std::env::consts::OS` to detect the current operating system
 3. **Module Dispatch**: Based on OS detection, the appropriate module is called (Linux, Windows, macOS)
 4. **Information Gathering**: Each OS module implements a `new()` method that gathers CPU information using OS-specific APIs
@@ -118,39 +120,59 @@ ___
 
 ## CLI Implementation Details
 
-The CLI argument parsing is handled in `src/main.rs` using the following structure:
+The CLI argument parsing is implemented in `src/cla.rs` using a custom, manual approach. No external libraries are used for argument parsing. This ensures maximum portability and transparency for contributors.
+
+### Manual Argument Parsing in cla.rs
+
+- The `Args` struct in `cla.rs` holds all supported CLI options, including flags for help, version, license, completions, logo override, and logo disabling.
+- The `Args::parse()` function iterates over `std::env::args()` and matches each argument, setting the appropriate fields in the struct. It handles both short and long options, as well as value-taking options (e.g., `--logo <VENDOR>`).
+- Error handling is performed for missing option values and unknown arguments, returning descriptive error messages.
+- The module also provides functions to print help, version, license, and shell completions for supported shells.
+
+#### Example Args struct
 
 ```rust
-#[derive(Parser)]
-#[command(author, version, about = "A CPU information fetcher", long_about = None)]
-struct Args {
-    /// Disable logo display
-    #[arg(short = 'n', long = "no-logo")]
-    no_logo: bool,
-    
-    /// Override logo display with specific vendor
-    #[arg(short = 'l', long = "logo", value_name = "VENDOR")]
-    logo: Option<String>,
+pub struct Args {
+    pub no_logo: bool,
+    pub logo: Option<String>,
+    pub license: bool,
+    pub help: bool,
+    pub version: bool,
+    pub completions: Option<String>,
 }
+```
+
+#### Example usage in main.rs
+
+```rust
+let args = match cla::Args::parse() {
+    Ok(args) => args,
+    Err(e) => {
+        eprintln!("{}", e);
+        eprintln!("Try 'rcpufetch --help' for more information.");
+        std::process::exit(1);
+    }
+};
 ```
 
 #### Logo Processing Logic
 
 1. **Logo Override Processing**: The logo argument is converted to the internal vendor ID format:
    ```rust
-   let logo_override = args.logo.as_ref().map(|logo| {
+   let logo_override = args.logo.as_ref().and_then(|logo| {
        match logo.to_lowercase().as_str() {
-           "nvidia" => "NVIDIA",
-           "powerpc" => "PowerPC", 
-           "arm" => "ARM",
-           "amd" => "AuthenticAMD",
-           "intel" => "GenuineIntel",
+           "nvidia" => Some("NVIDIA"),
+           "powerpc" => Some("PowerPC"),
+           "arm" => Some("ARM"),
+           "amd" => Some("AuthenticAMD"),
+           "intel" => Some("GenuineIntel"),
+           "apple" => Some("Apple"),
            _ => {
-               // Warning for unknown vendors
-               return None;
+               eprintln!("Warning: Unknown logo vendor '{}'. Valid options: nvidia, powerpc, arm, amd, intel, apple", logo);
+               None
            }
        }
-   }).flatten();
+   });
    ```
 
 2. **Display Method Selection**: Based on the CLI arguments, the appropriate display method is called:
@@ -165,28 +187,26 @@ struct Args {
 #### Error Handling
 
 - **Unknown logo vendors**: Display a warning message but continue execution with the actual vendor logo
-- **Invalid arguments**: Handled automatically by `clap` with helpful error messages
+- **Invalid arguments**: The parser in `cla.rs` returns descriptive error messages for unknown or malformed arguments
 - **Conflicting options**: `--no-logo` takes precedence over `--logo` if both are specified
 
 ### Adding New CLI Options
 
 When adding new CLI options, follow this pattern:
 
-1. **Add to Args struct** in `src/main.rs`:
+1. **Add to Args struct** in `src/cla.rs`:
    ```rust
    /// New option description
-   #[arg(long = "new-option")]
-   new_option: bool,
+   pub new_option: bool,
    ```
 
-2. **Update display method calls** to pass the new option:
-   ```rust
-   cpu_info.display_info_with_options(logo_override, args.new_option);
-   ```
+2. **Update the parser** in `Args::parse()` to recognize the new option.
 
-3. **Implement option handling** in each OS module's display methods.
+3. **Update display method calls** to pass the new option if needed.
 
-4. **Update documentation** in both README.md and CONTRIBUTING.md.
+4. **Implement option handling** in each OS module's display methods.
+
+5. **Update documentation** in both README.md and CONTRIBUTING.md.
 
 ___
 
@@ -458,265 +478,16 @@ TBD
 
 The macOS implementation in `src/macos/macos.rs` provides comprehensive CPU information gathering using `sysctl` APIs and handles both Intel and Apple Silicon architectures with special consideration for performance cores and efficiency cores.
 
-#### Data Sources
-
-The macOS implementation gathers information from multiple `sysctl` keys:
-
-1. **`machdep.cpu.brand_string`**: Primary source for CPU model name
-2. **`machdep.cpu.core_count`/`machdep.cpu.cores_per_package`**: Physical core count
-3. **`machdep.cpu.thread_count`/`machdep.cpu.logical_per_package`**: Logical core count (with hyperthreading)
-4. **`hw.cachesize`**: Traditional cache size information (Intel Macs)
-5. **`hw.cacheconfig`**: Cache configuration and count information
-6. **`hw.perflevel*.l*cachesize`**: Performance-level specific cache information (Apple Silicon)
-7. **`machdep.cpu.max_basic`**: Base frequency information (when available)
-8. **`hw.optional.arm.*`**: CPU feature flags and capabilities (Apple Silicon)
-
-#### MacOSCpuInfo Structure
-
-```rust
-pub struct MacOSCpuInfo {
-    model: String,           // CPU model name from sysctl
-    vendor: String,          // Vendor (Intel, AMD, Apple, or Unknown)
-    physical_cores: u32,     // Physical core count
-    logical_cores: u32,      // Logical core count (including hyperthreading)
-    base_mhz: Option<f32>,   // Base frequency in MHz (if available)
-    flags: String,           // CPU feature flags and capabilities
-    l1_size: Option<(u32, u32)>,  // L1 cache (size in KB, count)
-    l2_size: Option<(u32, u32)>,  // L2 cache (size in KB, count)
-    l3_size: Option<(u32, u32)>,  // L3 cache (size in KB, count)
-}
-```
-
-#### Vendor Detection
-
-The macOS implementation uses brand string analysis to determine the vendor:
-
-1. **Intel detection**: Searches for "intel" in the brand string
-2. **AMD detection**: Searches for "amd" in the brand string  
-3. **Apple detection**: Searches for "apple" in the brand string (Apple Silicon)
-4. **Fallback**: Uses "Unknown" for unrecognized vendors
-
-#### CPU Flags Detection
-
-The macOS implementation detects CPU feature flags and capabilities, particularly for Apple Silicon processors:
-
-**Apple Silicon Flags (ARM64):**
-The implementation queries `hw.optional.arm.*` sysctl keys to detect ARM-specific CPU features:
-
-1. **Query all ARM optional features**: Execute `sysctl hw.optional.arm.` command
-2. **Parse boolean values**: Each key returns 0 (disabled) or 1 (enabled)
-3. **Filter enabled features**: Only include features with value 1
-4. **Strip prefix**: Remove "hw.optional.arm." to get just the feature name
-5. **Format as CSV**: Return comma-separated list of enabled features
-
-**Example ARM features detected:**
-- `FEAT_AES`: AES encryption instructions
-- `FEAT_SHA256`/`FEAT_SHA512`: SHA hashing instructions  
-- `FEAT_CRC32`: CRC32 checksum instructions
-- `FEAT_LSE`: Large System Extensions
-- `FEAT_FP16`: Half-precision floating point
-- `FEAT_DotProd`: Dot product instructions
-- `AdvSIMD`: Advanced SIMD instructions
-
-**Implementation details:**
-```rust
-fn get_cpu_flags() -> String {
-    // Execute: sysctl hw.optional.arm.
-    // Parse each line: hw.optional.arm.FEATURE_NAME: 1
-    // Extract features with value 1
-    // Return: "FEAT_AES,FEAT_SHA256,AdvSIMD,..."
-}
-```
-
-The flags are displayed in the same format as Linux CPU flags for consistency across platforms.
-
-#### Apple Silicon Specific Handling
-
-Apple Silicon chips (M1, M2, M3, etc.) have a unique architecture with performance cores (P-cores) and efficiency cores (E-cores), each with different cache configurations:
-
-**Performance Level Cache Information:**
-- **`hw.perflevel0.*`**: Performance core (P-core) cache information
-- **`hw.perflevel1.*`**: Efficiency core (E-core) cache information
-
-**Special Cache Display Logic:**
-```rust
-// For Apple Silicon, display detailed performance-level cache info
-if self.vendor == "Apple" {
-    // Show P-Core L1 Cache: [size] I + [size] D
-    // Show E-Core L1 Cache: [size] I + [size] D  
-    // Show P-Core L2 Cache: [size]
-    // Show E-Core L2 Cache: [size]
-}
-```
-
-#### Core Count Calculation
-
-The macOS implementation handles core counting with fallbacks:
-
-1. **Primary method**: Use `machdep.cpu.core_count` and `machdep.cpu.thread_count`
-2. **Fallback method**: Use `machdep.cpu.cores_per_package` and `machdep.cpu.logical_per_package`
-3. **Logical core fallback**: If logical count unavailable, use physical count
-
-#### Cache Information Parsing
-
-The implementation uses a two-tier approach optimized for different Mac architectures:
-
-**Traditional Intel Mac Approach:**
-1. **Parse `hw.cachesize`**: Space-separated cache sizes in bytes
-2. **Parse `hw.cacheconfig`**: Corresponding cache counts/configuration
-3. **Convert to KB**: All cache sizes standardized to kilobytes
-4. **Handle L3 fallback**: Use performance level caches if traditional L3 unavailable
-
-**Apple Silicon Approach:**
-1. **Query performance levels**: Check `hw.perflevel0` and `hw.perflevel1` sysctl keys
-2. **Separate I/D caches**: Handle instruction and data caches separately for L1
-3. **Performance differentiation**: Display P-core and E-core caches separately
-4. **Fallback integration**: Use larger performance level L2 as equivalent "shared" cache
-
-#### Sysctl Helper Functions
-
-The implementation provides utility functions for sysctl interaction:
-
-```rust
-fn get_sysctl_string(key: &str) -> Result<String, String>
-fn get_sysctl_u32(key: &str) -> Result<u32, String>
-```
-
-These functions:
-- Execute `sysctl -n [key]` commands
-- Handle command execution errors
-- Parse string/numeric values with proper error handling
-- Return descriptive error messages for debugging
-
-#### Error Handling Best Practices
-
-```rust
-// Good: Graceful fallbacks with descriptive errors
-let physical_cores = Self::get_sysctl_u32("machdep.cpu.core_count")
-    .unwrap_or_else(|_| Self::get_sysctl_u32("machdep.cpu.cores_per_package").unwrap_or(0));
-
-// Good: Optional frequency information
-let base_mhz = Self::get_sysctl_string("machdep.cpu.max_basic")
-    .ok()
-    .and_then(|s| s.parse::<f32>().ok());
-
-// Good: Error context in sysctl calls
-fn get_sysctl_string(key: &str) -> Result<String, String> {
-    // Provides context about which sysctl key failed
-}
-```
-
-#### Adding macOS Features
-
-To add new CPU information for macOS:
-
-1. **Research sysctl keys**: Use `sysctl -a | grep cpu` or `sysctl -a | grep hw` to find relevant keys
-2. **Test across architectures**: Verify keys work on both Intel and Apple Silicon Macs
-3. **Handle architecture differences**: Apple Silicon may have different or additional keys
-4. **Add parsing logic**: Use the existing helper functions for consistency
-5. **Update display methods**: Add the new information to `get_info_lines()`
-
-#### macOS-Specific Considerations
-
-- **sysctl dependency**: All information gathering relies on the `sysctl` command being available
-- **Architecture variations**: Intel Macs vs Apple Silicon may provide different information
-- **Performance levels**: Apple Silicon's dual-core-type architecture requires special handling
-- **Limited frequency info**: macOS doesn't always expose detailed frequency information
-- **Privilege requirements**: Some sysctl keys may require elevated privileges
-- **CPU flags support**: ARM feature flags are available on Apple Silicon via `hw.optional.arm.*` keys
+- See the "Implementation Notes" section for details on data sources, error handling, and architecture-specific logic.
+- All public structs, methods, and helper functions in `macos.rs` should be documented using `///` doc comments, following the standards outlined in the "Coding Style" section. See `linux.rs` for examples of comprehensive documentation.
 
 ___
 
-## Adding Support for New Operating Systems
+## Documentation Standards for cla.rs
 
-To add support for a new OS (e.x. Solaris):
-
-1. **Create OS directory structure**:
-   ```
-   src/
-   ├── solaris/         # New OS directory
-   │   ├── solaris.rs   # Implementation file
-   │   └── mod.rs       # Module declaration
-   ```
-
-2. **Implement the standard interface**:
-   ```rust
-   pub struct SolarisCpuInfo {
-       model: String,
-       vendor: String,
-       // OS-specific fields
-   }
-   
-   impl SolarisCpuInfo {
-       pub fn new() -> Result<Self, String> {
-           // OS-specific information gathering
-       }
-       
-       pub fn display_info_with_logo(&self, logo_override: Option<&str>) {
-           // Display logic using get_logo_lines_for_vendor
-       }
-       
-       pub fn display_info_no_logo(&self) {
-           // Text-only display
-       }
-   }
-   ```
-
-3. **Update `main.rs`**:
-   ```rust
-   mod solaris;  // Add module declaration
-   
-   match os {
-       "linux" => { /* existing code */ },
-       "windows" => { /* existing code */ },
-       "macos" => { /* existing code */ },
-       "solaris" => {
-           use crate::solaris::solaris::SolarisCpuInfo;
-           // Implementation
-       },
-       _ => { /* unsupported OS */ }
-   }
-   ```
-
-4. **Research OS-specific APIs**:
-   - **Ex. Solaris**: `psrinfo`, `kstat`, `prtconf`, `/proc/cpuinfo` (if available)
-
-#### Solaris Implementation Guidelines
-
-For Solaris specifically, key data sources include:
-
-**Command-based Information:**
-- **`psrinfo -v`**: Detailed processor information including model, frequency
-- **`kstat cpu_info`**: Kernel statistics for CPU information
-- **`prtconf -v`**: System configuration including CPU details
-- **`isainfo -v`**: Instruction set architecture information
-
-**File-based Information:**
-- **`/proc/cpuinfo`**: May be available on some Solaris systems
-- **`/dev/cpu/`**: CPU device information (if accessible)
-
-**Sample Solaris Implementation Structure:**
-```rust
-impl SolarisCpuInfo {
-    fn get_psrinfo_data() -> Result<String, String> {
-        // Execute 'psrinfo -v' command
-        // Parse processor information
-    }
-    
-    fn get_kstat_data() -> Result<String, String> {
-        // Execute 'kstat cpu_info' command
-        // Parse kernel statistics
-    }
-    
-    fn parse_cpu_model(psrinfo_output: &str) -> String {
-        // Extract CPU model from psrinfo output
-    }
-    
-    fn parse_cpu_vendor(psrinfo_output: &str) -> String {
-        // Determine vendor from processor information
-    }
-}
-```
+- All public structs, methods, and helper functions in `cla.rs` must be documented using `///` doc comments.
+- Each function should include a summary, argument descriptions, return value, and error conditions if applicable.
+- See the "Coding Style" section for documentation templates and the `linux.rs` file for real-world examples.
 
 ___
 

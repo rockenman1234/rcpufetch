@@ -1,20 +1,53 @@
+//! macOS CPU information module for rcpufetch.
+//!
+//! This module implements comprehensive CPU information gathering for macOS systems,
+//! supporting both Intel and Apple Silicon architectures. It uses sysctl APIs and
+//! system commands to collect model, vendor, core counts, cache sizes, frequency,
+//! and CPU feature flags. All public items are documented following the standards
+//! outlined in CONTRIBUTING.md and the linux.rs example.
+
 use crate::art::logos::get_logo_lines_for_vendor;
 use std::process::Command;
+
+/// Struct representing parsed macOS CPU information.
+///
+/// Contains comprehensive CPU information gathered from sysctl and system commands,
+/// including model, vendor, architecture, core counts, cache sizes, frequency, and flags.
 pub struct MacOSCpuInfo {
+    /// CPU model name from sysctl
     model: String,
+    /// Vendor (Intel, AMD, Apple, or Unknown)
     vendor: String,
+    /// System architecture (e.g., x86_64, arm64)
     architecture: String,
+    /// Byte order (Little/Big Endian)
     byte_order: String,
+    /// Physical core count
     physical_cores: u32,
+    /// Logical core count (including hyperthreading)
     logical_cores: u32,
+    /// Base frequency in MHz (if available)
     base_mhz: Option<f32>,
+    /// L1 cache (size in KB, count)
     l1_size: Option<(u32, u32)>,
+    /// L2 cache (size in KB, count)
     l2_size: Option<(u32, u32)>,
+    /// L3 cache (size in KB, count)
     l3_size: Option<(u32, u32)>,
+    /// CPU feature flags and capabilities
     flags: String,
 }
 
 impl MacOSCpuInfo {
+    /// Gather all CPU information for macOS.
+    ///
+    /// Collects model, vendor, architecture, core counts, cache sizes, frequency,
+    /// and CPU flags using sysctl and system commands. Handles both Intel and Apple Silicon.
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(MacOSCpuInfo)` if all required information is gathered
+    /// * `Err(String)` if a critical error occurs during information gathering
     pub fn new() -> Result<Self, String> {
         // Get CPU brand string
         let model = Self::get_sysctl_string("machdep.cpu.brand_string")?;
@@ -76,7 +109,17 @@ impl MacOSCpuInfo {
         })
     }
     
-    /// Helper function to format cache size with appropriate units (KB or MB)
+    /// Helper function to format cache size with appropriate units (KB or MB).
+    ///
+    /// Converts cache sizes above 1000KB to megabytes with decimal precision.
+    ///
+    /// # Arguments
+    ///
+    /// * `size_kb` - Cache size in kilobytes
+    ///
+    /// # Returns
+    ///
+    /// Returns a formatted string with appropriate units (e.g., "288KB" or "6.0MB")
     fn format_cache_size(size_kb: u32) -> String {
         if size_kb >= 1000 {
             format!("{:.1}MB", size_kb as f32 / 1024.0)
@@ -85,7 +128,14 @@ impl MacOSCpuInfo {
         }
     }
 
-    /// Helper function to get comprehensive cache information
+    /// Helper function to get comprehensive cache information.
+    ///
+    /// Returns L1, L2, and L3 cache sizes and counts, using sysctl keys and
+    /// performance level queries for Apple Silicon.
+    ///
+    /// # Returns
+    ///
+    /// Tuple of (L1, L2, L3) cache info as Option<(size_kb, count)>
     fn get_cache_info() -> (Option<(u32, u32)>, Option<(u32, u32)>, Option<(u32, u32)>) {
         // First try the traditional hw.cachesize approach
         let cache_sizes = Self::get_sysctl_string("hw.cachesize").unwrap_or_default();
@@ -137,7 +187,16 @@ impl MacOSCpuInfo {
         (l1_size, l2_size, l3_size)
     }
 
-    /// Helper function to get a string value from sysctl
+    /// Helper function to get a string value from sysctl.
+    ///
+    /// # Arguments
+    ///
+    /// * `key` - sysctl key to query
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(String)` with the sysctl value
+    /// * `Err(String)` with error context if sysctl fails
     fn get_sysctl_string(key: &str) -> Result<String, String> {
         let output = Command::new("sysctl")
             .arg("-n")
@@ -152,14 +211,28 @@ impl MacOSCpuInfo {
         }
     }
     
-    /// Helper function to get a u32 value from sysctl
+    /// Helper function to get a u32 value from sysctl.
+    ///
+    /// # Arguments
+    ///
+    /// * `key` - sysctl key to query
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(u32)` with the parsed value
+    /// * `Err(String)` with error context if sysctl fails or value is not a valid u32
     fn get_sysctl_u32(key: &str) -> Result<u32, String> {
         let value_str = Self::get_sysctl_string(key)?;
         value_str.parse::<u32>()
             .map_err(|e| format!("Failed to parse '{}' as u32: {}", value_str, e))
     }
 
-    /// Get system architecture using uname -m
+    /// Get system architecture using uname -m.
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(String)` with the architecture string
+    /// * `Err(String)` if uname fails
     fn get_architecture() -> Result<String, String> {
         let output = Command::new("uname")
             .arg("-m")
@@ -175,9 +248,9 @@ impl MacOSCpuInfo {
 
     /// Get CPU flags from sysctl hw.optional.arm.* keys.
     ///
-    /// This function queries all available ARM CPU feature flags via sysctl and returns
-    /// a comma-separated string of enabled features, similar to Linux /proc/cpuinfo flags.
-    /// Only features with value '1' (enabled) are included in the output.
+    /// Queries all available ARM CPU feature flags via sysctl and returns a comma-separated
+    /// string of enabled features, similar to Linux /proc/cpuinfo flags. Only features with
+    /// value '1' (enabled) are included in the output.
     ///
     /// # Returns
     ///
@@ -214,9 +287,12 @@ impl MacOSCpuInfo {
 
     /// Display CPU information with logo (side-by-side layout).
     ///
-    /// This function displays comprehensive CPU information alongside a vendor logo
-    /// in a side-by-side layout. The logo can be overridden to display a different
-    /// vendor's logo regardless of the actual CPU vendor.
+    /// Displays comprehensive CPU information alongside a vendor logo in a side-by-side layout.
+    /// The logo can be overridden to display a different vendor's logo regardless of the actual CPU vendor.
+    ///
+    /// # Arguments
+    ///
+    /// * `logo_override` - Optional vendor ID to override the detected logo
     pub fn display_info_with_logo(&self, logo_override: Option<&str>) {
         let vendor_to_use = logo_override.unwrap_or(&self.vendor);
         let logo_lines = get_logo_lines_for_vendor(vendor_to_use).unwrap_or_else(|| vec![]);
@@ -280,8 +356,8 @@ impl MacOSCpuInfo {
 
     /// Display CPU information without any logo.
     ///
-    /// This function displays comprehensive CPU information in a simple list format
-    /// without any vendor logo or side-by-side alignment.
+    /// Displays comprehensive CPU information in a simple list format without any vendor logo
+    /// or side-by-side alignment. Flags are wrapped for readability.
     pub fn display_info_no_logo(&self) {
         let info_lines = self.get_info_lines();
         
@@ -320,8 +396,12 @@ impl MacOSCpuInfo {
 
     /// Get the formatted information lines for display.
     ///
-    /// This helper function generates the formatted CPU information lines
-    /// that are used by both logo and no-logo display methods.
+    /// Generates the formatted CPU information lines that are used by both logo and no-logo
+    /// display methods. For Apple Silicon, includes performance-level cache details.
+    ///
+    /// # Returns
+    ///
+    /// Vector of formatted information lines as strings.
     fn get_info_lines(&self) -> Vec<String> {
         let mut lines = vec![
             format!("Name: {}", self.model),
@@ -382,4 +462,4 @@ impl MacOSCpuInfo {
         
         lines
     }
-} 
+}

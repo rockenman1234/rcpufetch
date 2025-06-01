@@ -2,45 +2,40 @@ mod linux; // Declares the linux module (src/linux/mod.rs)
 mod art; // Declares the art module (src/art.rs)
 mod windows; // Declares the windows module (src/windows/mod.rs)
 mod macos; // Declares the macos module (src/macos/mod.rs)
-use clap::Parser;
-use std::env;
-
-/// Print license information
-fn print_license() {
-    println!("Copyright (C) 2025 - Present: Kenneth A. Jenkins, Alan D. Aguilar, & contributors.");
-    println!("Licensed under the GNU GPLv3: GNU General Public License version 3.");
-    println!("rcpufetch comes with ABSOLUTELY NO WARRANTY.");
-    println!();
-    println!("A copy of the GNU General Public License Version 3 should");
-    println!("have been provided with rcpufetch. If not, you can");
-    println!("find it at: <https://www.gnu.org/licenses/gpl-3.0.html>.");
-    println!();
-    println!("This is free software, and you are welcome to redistribute it");
-    println!("under certain conditions, as described above. Type `rcpufetch --help` for assistance.");
-}
-
-#[derive(Parser)]
-#[command(author, version, about = "A CPU information fetcher", long_about = None)]
-struct Args {
-    /// Disable logo display
-    #[arg(short = 'n', long = "no-logo")]
-    no_logo: bool,
-    
-    /// Override logo display with specific vendor (nvidia, powerpc, arm, amd, intel, apple)
-    #[arg(short = 'l', long = "logo", value_name = "VENDOR")]
-    logo: Option<String>,
-    
-    /// Display license information
-    #[arg(long = "license")]
-    license: bool,
-}
+mod cla; // Declares the command line arguments module (src/cla.rs)
+use std::env; // Declares the standard library's env module for environment variable access
 
 fn main() {
-    let args = Args::parse();
+    let args = match cla::Args::parse() {
+        Ok(args) => args,
+        Err(e) => {
+            eprintln!("{}", e);
+            eprintln!("Try 'rcpufetch --help' for more information.");
+            std::process::exit(1);
+        }
+    };
+
+    // Handle help flag
+    if args.help {
+        cla::print_help();
+        return;
+    }
+
+    // Handle version flag
+    if args.version {
+        cla::print_version();
+        return;
+    }
 
     // Handle license flag
     if args.license {
-        print_license();
+        cla::print_license();
+        return;
+    }
+
+    // Handle completions flag
+    if let Some(shell) = args.completions {
+        cla::print_completions(&shell);
         return;
     }
 
