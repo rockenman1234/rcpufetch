@@ -9,7 +9,7 @@ authors = [
 description = "[ALPHA] A rusty crossplatform, but simple CLI binutil for reading CPU information."
 readme = "README.md"
 license = "GPL-3.0"
-homepage = "https://github.com/rockenman1234/rcpufetch"
+repository = "https://github.com/rockenman1234/rcpufetch"
 keywords = [
     "cpu",
     "system-info",
