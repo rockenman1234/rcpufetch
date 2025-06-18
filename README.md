@@ -22,14 +22,14 @@
 
 | OS          | x86_64 / x86       | ARM                | RISC-V             | PowerPC            |
 |:-----------:|:------------------:|:------------------:|:------------------:|:------------------:|
-| GNU / Linux | ✅                 | ❓                 | ❓                 | ❓                |
+| GNU / Linux | ✅                 | ✅                 | ❓                 | ❓                 |
 | Windows     | ❌                 | ❌                 | -                  | -                  |
 | MacOS       | ❓                 | ✅                 | -                  | ❓                 |
-| FreeBSD     | ❌                 | ❌                 | ❌                 | ❌                |
+| FreeBSD     | ❌                 | ❌                 | ❌                 | ❌                 |
 
 
 > [!NOTE]
-> Linux & MacOS should be universal now, I haven't tested it or added more logos beyond x86_64 for Linux and arm64 for MacOS - TBD.
+> Linux & MacOS should be universal now, I haven't tested it or added more logos beyond x86_64/ for Linux and arm64 for MacOS - TBD.
 
 ## Installation
 You currenty have 2 ways to install `rcpufetch` for your system.
