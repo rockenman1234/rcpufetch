@@ -387,7 +387,19 @@ impl LinuxCpuInfo {
     /// * `logo_override` - Optional vendor ID to override the detected vendor logo
     pub fn display_info_with_logo(&self, logo_override: Option<&str>) {
         let vendor_to_use = logo_override.unwrap_or(&self.vendor);
-        let logo_lines = get_logo_lines_for_vendor(vendor_to_use).unwrap_or_else(|| vec![]);
+        
+        // Fallback to ARM logo for ARM32/ARM64 architectures when vendor is unknown or no logo available
+        let logo_lines = get_logo_lines_for_vendor(vendor_to_use)
+            .or_else(|| {
+                // Check if architecture is ARM-based and fallback to ARM logo
+                if (self.architecture.contains("arm") || self.architecture.contains("aarch64")) 
+                    && (vendor_to_use == "Unknown" || vendor_to_use.is_empty() || get_logo_lines_for_vendor(vendor_to_use).is_none()) {
+                    get_logo_lines_for_vendor("ARM")
+                } else {
+                    None
+                }
+            })
+            .unwrap_or_else(|| vec![]);
         
         let info_lines = vec![
             format!("Name: {:<30}", self.model),
